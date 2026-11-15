@@ -6,6 +6,12 @@
  */
 
 const initSqlJs = require('sql.js');
+let wasmBinary = null;
+try {
+  wasmBinary = require('./sql-wasm-binary');
+} catch (e) {
+  console.warn('[Database] Embedded wasm binary not available:', e.message);
+}
 const path = require('path');
 const fs = require('fs');
 // Import crypto functions
@@ -89,7 +95,7 @@ function run(sql, params = []) {
 // ─── Initialisation ─────────────────────────────────────────────────────────────
 
 async function initDB() {
-  const SQL = await initSqlJs();
+  const SQL = wasmBinary ? await initSqlJs({ wasmBinary }) : await initSqlJs();
 
   // Load existing DB file or create a fresh one
   let fileBuffer = null;

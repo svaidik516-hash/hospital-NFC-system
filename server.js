@@ -29,7 +29,12 @@ async function ensureSystemInitialized() {
       isSystemInitialized = true;
     })();
   }
-  await initPromise;
+  try {
+    await initPromise;
+  } catch (err) {
+    initPromise = null;
+    throw err;
+  }
 }
 
 // ─── Security Middleware ──────────────────────────────────────────────────────────
@@ -108,7 +113,10 @@ app.use(async (req, res, next) => {
     next();
   } catch (err) {
     console.error('System initialization error:', err);
-    res.status(500).json({ error: 'Database and system initialization failed' });
+    res.status(500).json({
+      error: 'Database and system initialization failed',
+      details: err.message
+    });
   }
 });
 
@@ -135,6 +143,10 @@ app.use(express.static(publicDir, {
     }
   }
 }));
+
+app.get('/', (req, res) => {
+  res.sendFile(path.join(publicDir, 'index.html'));
+});
 
 // ─── Helper: Decrypt Permission ───────────────────────────────────────────────────
 
