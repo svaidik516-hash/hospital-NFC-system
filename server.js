@@ -17,7 +17,20 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ─── Initialize Authentication & Database ──────────────────────────────────────────
-auth.initAuth().then(() => console.log('Auth system initialized')).catch(err => console.error('Auth init error:', err));
+let isSystemInitialized = false;
+let initPromise = null;
+
+async function ensureSystemInitialized() {
+  if (isSystemInitialized) return;
+  if (!initPromise) {
+    initPromise = (async () => {
+      await auth.initAuth();
+      await db.initDB();
+      isSystemInitialized = true;
+    })();
+  }
+  await initPromise;
+}
 
 // ─── Security Middleware ──────────────────────────────────────────────────────────
 
@@ -88,12 +101,28 @@ app.use((err, req, res, next) => {
   next(err);
 });
 
+// Ensure database & auth system are ready before processing ANY request (critical for Vercel serverless cold starts)
+app.use(async (req, res, next) => {
+  try {
+    await ensureSystemInitialized();
+    next();
+  } catch (err) {
+    console.error('System initialization error:', err);
+    res.status(500).json({ error: 'Database and system initialization failed' });
+  }
+});
+
 // ─── Static Files ─────────────────────────────────────────────────────────────────
 
 const publicDir = path.join(__dirname, 'public');
-if (!fs.existsSync(publicDir)) {
-  fs.mkdirSync(publicDir, { recursive: true });
+try {
+  if (!fs.existsSync(publicDir)) {
+    fs.mkdirSync(publicDir, { recursive: true });
+  }
+} catch (e) {
+  // Read-only filesystem in serverless environments
 }
+
 app.use(express.static(publicDir, {
   etag: false,
   lastModified: false,
@@ -125,11 +154,15 @@ function auditMiddleware(action, getDetails) {
   return (req, res, next) => {
     const originalSend = res.send;
     res.send = function (body) {
-      if (res.statusCode >= 200 && res.statusCode < 400) {
-        const details = getDetails ? getDetails(req, res, body) : {};
-        auth.auditLog(action, req.user?.userId, { ...details, ip: req.ip, method: req.method, path: req.path });
+      try {
+        if (res.statusCode >= 200 && res.statusCode < 400) {
+          const details = getDetails ? getDetails(req, res, body) : {};
+          auth.auditLog(action, req.user?.userId, { ...details, ip: req.ip, method: req.method, path: req.path });
+        }
+      } catch (err) {
+        console.warn('Audit middleware error:', err.message);
       }
-      originalSend.call(this, body);
+      return originalSend.call(this, body);
     };
     next();
   };
@@ -1017,29 +1050,10 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('UNHANDLED REJECTION at:', promise, 'reason:', reason);
 });
 
-// ─── START SERVER / VERCEL EXPORT ────────────────────────────────────────────────
-
-let isDbInitialized = false;
-async function ensureDb() {
-  if (!isDbInitialized) {
-    await db.initDB();
-    isDbInitialized = true;
-  }
-}
-
-// Middleware to ensure database is ready on serverless environments
-app.use(async (req, res, next) => {
-  try {
-    await ensureDb();
-    next();
-  } catch (err) {
-    console.error('Database init error:', err);
-    res.status(500).json({ error: 'Database initialization failed' });
-  }
-});
+// ─── START SERVER (LOCAL DEV) / EXPORT (VERCEL SERVERLESS) ───────────────────────
 
 if (!process.env.VERCEL) {
-  ensureDb().then(() => {
+  ensureSystemInitialized().then(() => {
     const server = app.listen(PORT, () => {
       console.log(`NFC Hospital Management System running at http://localhost:${PORT}`);
       console.log(`API available at http://localhost:${PORT}/api`);
@@ -1050,7 +1064,7 @@ if (!process.env.VERCEL) {
       console.error('Server HTTP error:', err);
     });
   }).catch(err => {
-    console.error('Failed to initialise database:', err);
+    console.error('Failed to initialise system:', err);
     process.exit(1);
   });
 }

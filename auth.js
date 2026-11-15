@@ -8,8 +8,8 @@ const DATA_DIR = process.env.VERCEL ? path.join('/tmp', 'data') : path.join(__di
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const AUDIT_LOG_FILE = path.join(DATA_DIR, 'audit.log');
 
-const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(64).toString('hex');
-const REFRESH_SECRET = process.env.REFRESH_SECRET || crypto.randomBytes(64).toString('hex');
+const JWT_SECRET = process.env.JWT_SECRET || 'mediscan-nfc-jwt-secret-stable-key-2024';
+const REFRESH_SECRET = process.env.REFRESH_SECRET || 'mediscan-nfc-refresh-secret-stable-key-2024';
 
 const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_EXPIRY = '7d';
@@ -60,48 +60,83 @@ const ROLE_PERMISSIONS = {
 };
 
 function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+  } catch (err) {
+    console.warn('[Auth] Warning creating DATA_DIR:', err.message);
   }
 }
 
 function loadUsers() {
   ensureDataDir();
   if (!fs.existsSync(USERS_FILE)) {
+    const bundledUsers = path.join(__dirname, 'data', 'users.json');
+    if (fs.existsSync(bundledUsers)) {
+      try {
+        const data = fs.readFileSync(bundledUsers, 'utf8');
+        return JSON.parse(data);
+      } catch (e) {
+        console.warn('[Auth] Could not read bundled users.json:', e.message);
+      }
+    }
     return [];
   }
-  const data = fs.readFileSync(USERS_FILE, 'utf8');
-  return JSON.parse(data);
+  try {
+    const data = fs.readFileSync(USERS_FILE, 'utf8');
+    return JSON.parse(data);
+  } catch (err) {
+    console.warn('[Auth] Error reading users file:', err.message);
+    return [];
+  }
 }
 
 function saveUsers(users) {
-  ensureDataDir();
-  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+  try {
+    ensureDataDir();
+    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+  } catch (err) {
+    console.warn('[Auth] Failed to write users.json to disk:', err.message);
+  }
 }
 
 function auditLog(action, userId, details) {
-  ensureDataDir();
-  const timestamp = new Date().toISOString();
-  const logEntry = `${timestamp} | ${action} | userId:${userId} | ${JSON.stringify(details)}\n`;
-  fs.appendFileSync(AUDIT_LOG_FILE, logEntry);
+  try {
+    ensureDataDir();
+    const timestamp = new Date().toISOString();
+    const logEntry = `${timestamp} | ${action} | userId:${userId} | ${JSON.stringify(details)}\n`;
+    fs.appendFileSync(AUDIT_LOG_FILE, logEntry);
+  } catch (err) {
+    console.warn('[Auth] Audit log write failed:', err.message);
+  }
 }
 
 function getAuditLogs(limit = 100) {
-  ensureDataDir();
-  if (!fs.existsSync(AUDIT_LOG_FILE)) {
+  try {
+    ensureDataDir();
+    if (!fs.existsSync(AUDIT_LOG_FILE)) {
+      return [];
+    }
+    const lines = fs.readFileSync(AUDIT_LOG_FILE, 'utf8').trim().split('\n');
+    return lines.filter(Boolean).slice(-limit).map(line => {
+      try {
+        const parts = line.split(' | ');
+        if (parts.length < 4) return { raw: line };
+        return {
+          timestamp: parts[0],
+          action: parts[1],
+          userId: parts[2].replace('userId:', ''),
+          details: JSON.parse(parts.slice(3).join(' | ')),
+        };
+      } catch (e) {
+        return { raw: line };
+      }
+    }).reverse();
+  } catch (err) {
+    console.warn('[Auth] Error reading audit logs:', err.message);
     return [];
   }
-  const lines = fs.readFileSync(AUDIT_LOG_FILE, 'utf8').trim().split('\n');
-  return lines.slice(-limit).map(line => {
-    const parts = line.split(' | ');
-    if (parts.length < 4) return { raw: line };
-    return {
-      timestamp: parts[0],
-      action: parts[1],
-      userId: parts[2].replace('userId:', ''),
-      details: JSON.parse(parts.slice(3).join(' | ')),
-    };
-  }).reverse();
 }
 
 function hashPassword(password) {

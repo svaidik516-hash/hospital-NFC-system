@@ -23,11 +23,14 @@ function deriveKey(masterKey, salt) {
 function getMasterKey() {
   const envKey = process.env.MASTER_ENCRYPTION_KEY;
   if (envKey) {
-    const key = Buffer.from(envKey, 'hex');
-    if (key.length !== KEY_LENGTH) {
-      throw new Error(`MASTER_ENCRYPTION_KEY must be ${KEY_LENGTH} bytes (${KEY_LENGTH * 2} hex chars)`);
+    const trimmed = envKey.trim();
+    if (/^[0-9a-fA-F]{64}$/.test(trimmed)) {
+      return Buffer.from(trimmed, 'hex');
     }
-    return key;
+    if (Buffer.from(trimmed, 'utf8').length === KEY_LENGTH) {
+      return Buffer.from(trimmed, 'utf8');
+    }
+    return crypto.scryptSync(trimmed, 'hospital-nfc-master-salt', KEY_LENGTH);
   }
   // Fallback: derive from a static string (NOT for production use)
   const fallback = 'fallback-master-key-change-in-production';

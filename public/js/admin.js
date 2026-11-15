@@ -233,7 +233,7 @@ async function initAdmin() {
 
         if (!response.ok) {
           const error = await response.json().catch(() => ({ message: 'Error saving patient' }));
-          throw new Error(error.message || 'Error saving patient');
+          throw new Error(error.error || error.message || 'Error saving patient');
         }
 
         const result = await response.json();
@@ -753,7 +753,7 @@ async function initAdmin() {
 
         if (!response.ok) {
           const error = await response.json().catch(() => ({ message: 'Error saving doctor' }));
-          throw new Error(error.message || 'Error saving doctor');
+          throw new Error(error.error || error.message || 'Error saving doctor');
         }
 
         if (editingDoctorId) {

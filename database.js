@@ -26,8 +26,12 @@ module.exports.MASTER_KEY = MASTER_KEY;
 
 // Ensure data directory exists (use writable /tmp directory when deployed on Vercel)
 const dataDir = process.env.VERCEL ? path.join('/tmp', 'data') : path.join(__dirname, 'data');
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+try {
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+} catch (e) {
+  console.warn('[Database] Warning creating dataDir:', e.message);
 }
 
 const DB_PATH = path.join(dataDir, 'hospital.db');
@@ -39,9 +43,17 @@ let db;
 
 /** Write the in-memory database to disk. Called after every write operation. */
 function save() {
-  const data = db.export();
-  const buffer = Buffer.from(data);
-  fs.writeFileSync(DB_PATH, buffer);
+  if (!db) return;
+  try {
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    const data = db.export();
+    const buffer = Buffer.from(data);
+    fs.writeFileSync(DB_PATH, buffer);
+  } catch (err) {
+    console.warn('[Database] Disk write error (continuing in-memory):', err.message);
+  }
 }
 
 // ─── Helper wrappers around sql.js's statement API ──────────────────────────────
@@ -80,8 +92,25 @@ async function initDB() {
   const SQL = await initSqlJs();
 
   // Load existing DB file or create a fresh one
+  let fileBuffer = null;
   if (fs.existsSync(DB_PATH)) {
-    const fileBuffer = fs.readFileSync(DB_PATH);
+    try {
+      fileBuffer = fs.readFileSync(DB_PATH);
+    } catch (e) {
+      console.warn('[Database] Could not read DB_PATH:', e.message);
+    }
+  } else {
+    const bundledPath = path.join(__dirname, 'data', 'hospital.db');
+    if (fs.existsSync(bundledPath)) {
+      try {
+        fileBuffer = fs.readFileSync(bundledPath);
+      } catch (e) {
+        console.warn('[Database] Could not read bundled hospital.db:', e.message);
+      }
+    }
+  }
+
+  if (fileBuffer) {
     db = new SQL.Database(fileBuffer);
   } else {
     db = new SQL.Database();
