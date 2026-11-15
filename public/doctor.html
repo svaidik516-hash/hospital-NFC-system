@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Doctor Desk — MediScan NFC Operations Center</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@500;600;700;800&display=swap">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="doctor-portal-body">
+
+  <!-- Main Application Content Container -->
+  <div class="app-main-content">
+
+    <!-- ==============================================================
+         2. FLOATING TOP HORIZONTAL GLASS CAPSULE NAV
+         ============================================================== -->
+    <header class="top-glass-nav" role="banner">
+      <!-- Left Brand Badge -->
+      <a href="index.html" class="nav-brand">
+        <div class="brand-icon-box">
+          <i class="fas fa-hospital-symbol"></i>
+        </div>
+        <div class="brand-text">
+          <span class="brand-title">MediScan NFC</span>
+          <span class="brand-subtitle">HOSPITAL OPERATIONS CENTER</span>
+        </div>
+      </a>
+
+      <!-- Center Segmented Pill Switcher -->
+      <nav class="segmented-nav-capsule" role="navigation" aria-label="Main Navigation">
+        <a href="index.html" class="nav-pill">
+          <i class="fas fa-th-large"></i>
+          <span>Dashboard</span>
+        </a>
+        <a href="reception.html" class="nav-pill">
+          <i class="fas fa-door-open"></i>
+          <span>Reception Kiosk</span>
+        </a>
+        <a href="doctor.html" class="nav-pill active">
+          <i class="fas fa-user-md"></i>
+          <span>Doctor Desk</span>
+        </a>
+        <a href="admin.html" class="nav-pill">
+          <i class="fas fa-shield-alt"></i>
+          <span>Admin & Cards</span>
+        </a>
+      </nav>
+
+      <!-- Right Status Cluster -->
+      <div class="nav-right-cluster">
+        <div class="system-live-pill">
+          <span class="pulse-dot"></span>
+          <span>Station Active</span>
+          <i class="fas fa-heartbeat" style="font-size: 11px; margin-left: 2px;"></i>
+        </div>
+        <div class="user-avatar-pill" id="userAvatar" title="Click for menu">
+          <span id="userInitials">DR</span>
+        </div>
+        <div class="user-dropdown" id="userDropdown">
+          <div class="dropdown-header">
+            <span id="dropdownName">User Name</span>
+            <span id="dropdownRole" class="badge">Role</span>
+          </div>
+          <hr class="dropdown-divider">
+          <a href="#" class="dropdown-item" onclick="showProfile()"><i class="fas fa-user"></i> Profile</a>
+          <a href="#" class="dropdown-item" onclick="showSettings()"><i class="fas fa-cog"></i> Settings</a>
+          <hr class="dropdown-divider">
+          <a href="#" class="dropdown-item dropdown-danger" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Sign Out</a>
+        </div>
+      </div>
+    </header>
+
+    <!-- ==============================================================
+         3. PAGE HEADER & FLOATING GLASS CLOCK PILL
+         ============================================================== -->
+    <header class="page-header">
+      <div class="header-title-wrap">
+        <div class="header-icon-badge" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%);">
+          <i class="fas fa-stethoscope"></i>
+        </div>
+        <div>
+          <h1>Physician Clinical Desk & EHR Consultation Station</h1>
+          <p class="subtitle">Contactless patient dossier retrieval, vitals logging, digital e-prescribing, and patient transmission</p>
+        </div>
+      </div>
+
+      <div class="floating-date-pill">
+        <i class="far fa-calendar-alt"></i>
+        <span id="currentDate">Friday, Nov 13, 2026</span>
+        <span id="currentTime" style="margin-left: 6px; font-weight: 700; color: #0084FF;">12:51:41 PM</span>
+      </div>
+    </header>
+
+    <!-- ==============================================================
+         4. DOCTOR WORKSTATION 2-COLUMN MAIN GRID
+         ============================================================== -->
+    <div class="doctor-main-grid">
+
+      <!-- ==============================================================
+           LEFT / CENTER: Main Clinical Workstation
+           ============================================================== -->
+      <div class="doctor-content">
+
+        <!-- Combined Doctor Station & NFC Terminal Card -->
+        <section class="card station-command-card" id="doctorStationCard" style="margin-bottom: 24px;">
+          <div class="station-grid">
+            <!-- Left: Attending Physician Picker -->
+            <div class="station-physician-box">
+              <label for="doctorSelect" style="font-size: 12.5px; font-weight: 700; color: #1E293B; display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                <i class="fas fa-user-md" style="color: #0084FF;"></i> Attending Physician Profile:
+              </label>
+              <div class="select-wrapper">
+                <select id="doctorSelect" class="form-control" style="font-weight: 600;">
+                  <option value="">Select Doctor Profile…</option>
+                </select>
+              </div>
+              <div style="margin-top: 10px; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #059669; background: rgba(16, 185, 129, 0.12); padding: 4px 12px; border-radius: 20px;">
+                <i class="fas fa-check-circle"></i> Desk Active &bull; Ready for Patient Tap
+              </div>
+            </div>
+
+            <!-- Right: NFC Scan Reader -->
+            <div class="station-scanner-box" id="doctorScanSection">
+              <div class="nfc-mini-reader-target" id="nfcScanArea" style="cursor: pointer;">
+                <div class="radar-pulse-ring"></div>
+                <div class="reader-icon" style="width: 44px; height: 44px; border-radius: 50%; background: var(--color-primary-gradient); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 18px; box-shadow: var(--glass-glow-blue);"><i class="fas fa-wifi" style="transform: rotate(90deg);"></i></div>
+                <div class="reader-text-block">
+                  <strong style="display: block; font-size: 13.5px; color: #0F172A;">Tap Patient NFC Card</strong>
+                  <span style="font-size: 11.5px; color: #64748B;">or enter Card UID manually below</span>
+                </div>
+              </div>
+              <div class="nfc-manual-entry" style="margin-top: 10px;">
+                <div class="input-with-btn">
+                  <input type="text" id="doctorCardInput" class="form-control" placeholder="Enter or scan Card UID (e.g. 04A1B2C3)" aria-label="Card UID" autofocus>
+                  <button type="button" id="btnLoadPatient" class="btn-pill-primary" style="white-space: nowrap;">
+                    <i class="fas fa-id-card"></i> Load File
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Empty Workstation State (When no patient is loaded) -->
+        <div id="emptyDoctorStation" class="card empty-station-placeholder" style="padding: 48px 24px; text-align: center;">
+          <div style="display: inline-flex; align-items: center; justify-content: center; width: 68px; height: 68px; border-radius: 50%; background: rgba(0, 132, 255, 0.1); border: 1px solid rgba(0, 132, 255, 0.25); color: #0084FF; margin-bottom: 16px;">
+            <i class="fas fa-wifi" style="transform: rotate(90deg); font-size: 26px;"></i>
+          </div>
+          <h3 style="font-size: 19px; font-weight: 800; color: #0F172A; margin-bottom: 6px;">Awaiting Patient NFC Card Tap</h3>
+          <p style="font-size: 13.5px; color: #64748B; max-width: 520px; margin: 0 auto;">
+            Hold the patient's physical smart card against the USB hardware reader above, or select an arrived patient from Today's Queue in the right sidebar to access their electronic health record.
+          </p>
+        </div>
+
+        <!-- ==============================================================
+             PATIENT DOSSIER WORKSTATION (Revealed after NFC Card Tap)
+             ============================================================== -->
+        <div id="patientRecordPanel" style="display:none;" class="clinical-workstation">
+
+          <!-- ==============================================================
+               SECTION 1: PATIENT IDENTITY & EMERGENCY DOSSIER
+               ============================================================== -->
+          <section class="card clinical-section section-patient-header" id="patientSummary">
+            <div class="card-header-styled">
+              <div class="header-left-cluster">
+                <span class="section-tag-pill tag-blue">SECTION 1</span>
+                <h2><i class="fas fa-id-badge"></i> Patient Identity & Emergency Profile</h2>
+              </div>
+              <button class="btn btn-sm btn-danger-outline" id="btnCheckoutPatient" title="Conclude consultation and discharge patient" style="padding: 6px 14px; border-radius: 20px; font-weight: 600;">
+                <i class="fas fa-sign-out-alt"></i> Complete Consultation & Discharge
+              </button>
+            </div>
+
+            <div class="card-body" style="padding: 24px;">
+              <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.7);">
+                <div style="width: 64px; height: 64px; border-radius: 20px; background: var(--color-primary-gradient); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 28px; box-shadow: var(--glass-glow-blue);">
+                  <i class="fas fa-user-circle"></i>
+                </div>
+                <div style="flex: 1;">
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <h2 id="drPatientName" style="font-size: 22px; font-weight: 800; color: #0F172A; margin: 0;">—</h2>
+                    <span class="nfc-chip-pill" id="drCardChip"><i class="fas fa-wifi" style="transform: rotate(90deg); font-size: 11px;"></i> <span id="drCardChipVal">NFC CARD</span></span>
+                  </div>
+                  <div style="font-size: 12.5px; color: #64748B; margin-top: 3px;">Verified Contactless Health File &bull; Encrypted Clinical Dossier</div>
+                </div>
+              </div>
+
+              <!-- Demographics Grid -->
+              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px;">
+                <div style="background: rgba(255, 255, 255, 0.55); border: 1px solid rgba(255, 255, 255, 0.8); border-radius: 14px; padding: 12px 16px;">
+                  <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748B; display: block;"><i class="fas fa-birthday-cake" style="color: #0084FF;"></i> Age</span>
+                  <strong id="drPatientAge" style="font-size: 15px; color: #0F172A; font-weight: 700;">—</strong>
+                </div>
+                <div style="background: rgba(255, 255, 255, 0.55); border: 1px solid rgba(255, 255, 255, 0.8); border-radius: 14px; padding: 12px 16px;">
+                  <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748B; display: block;"><i class="fas fa-venus-mars" style="color: #8B5CF6;"></i> Gender</span>
+                  <strong id="drPatientGender" style="font-size: 15px; color: #0F172A; font-weight: 700;">—</strong>
+                </div>
+                <div style="background: rgba(255, 255, 255, 0.55); border: 1px solid rgba(255, 255, 255, 0.8); border-radius: 14px; padding: 12px 16px;">
+                  <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748B; display: block;"><i class="fas fa-tint" style="color: #EF4444;"></i> Blood Group</span>
+                  <span class="blood-pill" id="drPatientBlood" style="display: inline-block; padding: 2px 10px; border-radius: 12px; background: rgba(239, 68, 68, 0.12); color: #DC2626; font-weight: 700; font-size: 13px;">—</span>
+                </div>
+                <div style="background: rgba(255, 255, 255, 0.55); border: 1px solid rgba(255, 255, 255, 0.8); border-radius: 14px; padding: 12px 16px;">
+                  <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748B; display: block;"><i class="fas fa-phone-alt" style="color: #10B981;"></i> Phone</span>
+                  <strong id="drPatientPhone" style="font-size: 13.5px; color: #0F172A; font-weight: 600;">—</strong>
+                </div>
+                <div style="grid-column: span 4; background: rgba(255, 255, 255, 0.55); border: 1px solid rgba(255, 255, 255, 0.8); border-radius: 14px; padding: 12px 16px;">
+                  <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748B; display: block;"><i class="fas fa-user-shield" style="color: #F59E0B;"></i> Emergency Contact</span>
+                  <strong id="drPatientEmergency" style="font-size: 13px; color: #0F172A; font-weight: 600;">—</strong>
+                </div>
+              </div>
+
+              <!-- Alerts (Allergies & Chronic Conditions) -->
+              <div class="clinical-alerts-wrapper">
+                <div class="alert-box alert-allergy" id="drAllergyAlert" style="display:none; padding: 14px 18px; border-radius: 16px; background: rgba(254, 226, 226, 0.85); border: 1px solid #FCA5A5; color: #991B1B; margin-bottom: 12px;">
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 20px; color: #DC2626;"></i>
+                    <div>
+                      <strong style="font-size: 13.5px;">CRITICAL ALLERGY ALERT:</strong>
+                      <span id="drAllergies" style="font-weight: 700; margin-left: 6px;">—</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="alert-box alert-chronic" id="drChronicAlert" style="display:none; padding: 14px 18px; border-radius: 16px; background: rgba(254, 243, 199, 0.85); border: 1px solid #FCD34D; color: #92400E;">
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <i class="fas fa-notes-medical" style="font-size: 20px; color: #D97706;"></i>
+                    <div>
+                      <strong style="font-size: 13.5px;">CHRONIC CONDITIONS:</strong>
+                      <span id="drChronic" style="font-weight: 700; margin-left: 6px;">—</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ==============================================================
+               SECTION 2: OBJECTIVE VITALS & MEASUREMENTS
+               ============================================================== -->
+          <section class="card clinical-section section-vitals" id="vitalsSection">
+            <div class="card-header-styled">
+              <div class="header-left-cluster">
+                <span class="section-tag-pill tag-teal">SECTION 2</span>
+                <h2><i class="fas fa-heartbeat"></i> Objective Physical Vitals</h2>
+              </div>
+              <span class="header-note"><i class="fas fa-info-circle"></i> Logged to current consultation</span>
+            </div>
+
+            <div class="card-body" style="padding: 24px;">
+              <form id="vitalsForm" autocomplete="off">
+                <div class="vitals-metric-grid" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 20px;">
+                  <!-- BP -->
+                  <div class="vital-card" style="background: rgba(255, 255, 255, 0.55); border: 1px solid rgba(255, 255, 255, 0.85); border-radius: 16px; padding: 14px;">
+                    <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #0084FF; margin-bottom: 8px;">
+                      <i class="fas fa-tachometer-alt"></i> Blood Pressure
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <input type="text" id="vitalBP" name="bp" placeholder="e.g. 120/80" class="form-control" style="font-weight: 700; font-size: 15px;">
+                      <span style="font-size: 11px; color: #64748B; font-weight: 600;">mmHg</span>
+                    </div>
+                  </div>
+
+                  <!-- Temp -->
+                  <div class="vital-card" style="background: rgba(255, 255, 255, 0.55); border: 1px solid rgba(255, 255, 255, 0.85); border-radius: 16px; padding: 14px;">
+                    <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #EF4444; margin-bottom: 8px;">
+                      <i class="fas fa-thermometer-half"></i> Body Temp
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <input type="text" id="vitalTemp" name="temperature" placeholder="e.g. 98.6" class="form-control" style="font-weight: 700; font-size: 15px;">
+                      <span style="font-size: 11px; color: #64748B; font-weight: 600;">°F</span>
+                    </div>
+                  </div>
+
+                  <!-- HR -->
+                  <div class="vital-card" style="background: rgba(255, 255, 255, 0.55); border: 1px solid rgba(255, 255, 255, 0.85); border-radius: 16px; padding: 14px;">
+                    <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #10B981; margin-bottom: 8px;">
+                      <i class="fas fa-heart"></i> Heart Rate
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <input type="text" id="vitalHR" name="heart_rate" placeholder="e.g. 74" class="form-control" style="font-weight: 700; font-size: 15px;">
+                      <span style="font-size: 11px; color: #64748B; font-weight: 600;">bpm</span>
+                    </div>
+                  </div>
+
+                  <!-- SpO2 -->
+                  <div class="vital-card" style="background: rgba(255, 255, 255, 0.55); border: 1px solid rgba(255, 255, 255, 0.85); border-radius: 16px; padding: 14px;">
+                    <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #06B6D4; margin-bottom: 8px;">
+                      <i class="fas fa-lungs"></i> Oxygen (SpO2)
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <input type="text" id="vitalSpO2" name="spo2" placeholder="e.g. 98" class="form-control" style="font-weight: 700; font-size: 15px;">
+                      <span style="font-size: 11px; color: #64748B; font-weight: 600;">%</span>
+                    </div>
+                  </div>
+
+                  <!-- Weight -->
+                  <div class="vital-card" style="background: rgba(255, 255, 255, 0.55); border: 1px solid rgba(255, 255, 255, 0.85); border-radius: 16px; padding: 14px;">
+                    <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #8B5CF6; margin-bottom: 8px;">
+                      <i class="fas fa-weight"></i> Weight
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <input type="text" id="vitalWeight" name="weight" placeholder="e.g. 72" class="form-control" style="font-weight: 700; font-size: 15px;">
+                      <span style="font-size: 11px; color: #64748B; font-weight: 600;">kg</span>
+                    </div>
+                  </div>
+                </div>
+
+                <button type="submit" id="btnSaveVitals" class="btn-pill-primary">
+                  <i class="fas fa-check-circle"></i> Save Patient Vitals
+                </button>
+              </form>
+            </div>
+          </section>
+
+          <!-- ==============================================================
+               SECTION 3: CLINICAL CONSULTATION & DIAGNOSIS
+               ============================================================== -->
+          <section class="card clinical-section section-diagnosis" id="currentVisitSection">
+            <div class="card-header-styled">
+              <div class="header-left-cluster">
+                <span class="section-tag-pill tag-blue">SECTION 3</span>
+                <h2><i class="fas fa-stethoscope"></i> Clinical Assessment & Diagnosis</h2>
+              </div>
+              <span class="header-note">Physician Documentation</span>
+            </div>
+
+            <div class="card-body" style="padding: 24px;">
+              <form id="currentVisitForm" class="clinical-form">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                  <div class="form-group">
+                    <label for="visitSymptoms" style="font-size: 12.5px; font-weight: 700; color: #1E293B; display: block; margin-bottom: 8px;">
+                      <i class="fas fa-comment-medical" style="color: #0084FF;"></i> Chief Symptoms & Patient Presentation
+                    </label>
+                    <textarea id="visitSymptoms" name="symptoms" rows="3" class="form-control" placeholder="Describe symptoms, duration, and patient complaints…"></textarea>
+                  </div>
+                  <div class="form-group">
+                    <label for="visitDiagnosis" style="font-size: 12.5px; font-weight: 700; color: #1E293B; display: block; margin-bottom: 8px;">
+                      <i class="fas fa-clipboard-check" style="color: #10B981;"></i> Primary Clinical Diagnosis <span class="required" style="color: #DC2626;">*</span>
+                    </label>
+                    <textarea id="visitDiagnosis" name="diagnosis" rows="3" class="form-control" placeholder="Enter confirmed medical diagnosis / ICD summary…"></textarea>
+                  </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 16px;">
+                  <label for="visitNotes" style="font-size: 12.5px; font-weight: 700; color: #1E293B; display: block; margin-bottom: 8px;">
+                    <i class="fas fa-file-medical-alt" style="color: #8B5CF6;"></i> Doctor's Clinical Progress Notes & Observations
+                  </label>
+                  <textarea id="visitNotes" name="notes" rows="2" class="form-control" placeholder="Additional treatment observations, lifestyle recommendations, diet plan…"></textarea>
+                </div>
+
+                <button type="submit" id="btnSaveVisit" class="btn-pill-primary">
+                  <i class="fas fa-save"></i> Save Diagnosis & Consultation Notes
+                </button>
+              </form>
+            </div>
+          </section>
+
+          <!-- ==============================================================
+               SECTION 4: PHARMACOTHERAPY & E-PRESCRIPTION BUILDER
+               ============================================================== -->
+          <section class="card clinical-section section-prescriptions" id="prescriptionSection">
+            <div class="card-header-styled">
+              <div class="header-left-cluster">
+                <span class="section-tag-pill tag-purple">SECTION 4</span>
+                <h2><i class="fas fa-pills"></i> E-Prescription & Medication Builder</h2>
+              </div>
+              <span class="header-note">Saved directly to NFC Card and database</span>
+            </div>
+
+            <div class="card-body" style="padding: 24px;">
+              <form id="prescriptionForm" class="rx-builder-form" autocomplete="off">
+                <div style="display: grid; grid-template-columns: 2fr 1fr 1.2fr 1fr; gap: 14px; margin-bottom: 14px;">
+                  <div class="form-group">
+                    <label for="medName" style="font-size: 12px; font-weight: 700; color: #1E293B; display: block; margin-bottom: 6px;">Medicine Name <span style="color: #DC2626;">*</span></label>
+                    <input type="text" id="medName" name="medicine_name" class="form-control" placeholder="e.g. Amlodipine Besylate, Amoxicillin">
+                  </div>
+                  <div class="form-group">
+                    <label for="medDosage" style="font-size: 12px; font-weight: 700; color: #1E293B; display: block; margin-bottom: 6px;">Dosage</label>
+                    <input type="text" id="medDosage" name="dosage" class="form-control" placeholder="e.g. 5mg, 500mg">
+                  </div>
+                  <div class="form-group">
+                    <label for="medFrequency" style="font-size: 12px; font-weight: 700; color: #1E293B; display: block; margin-bottom: 6px;">Frequency</label>
+                    <select id="medFrequency" name="frequency" class="form-control">
+                      <option value="Once daily">Once daily (QD)</option>
+                      <option value="Twice daily">Twice daily (BID)</option>
+                      <option value="Thrice daily">Thrice daily (TID)</option>
+                      <option value="Four times daily">Four times daily (QID)</option>
+                      <option value="Every 8 hours">Every 8 hours</option>
+                      <option value="Before meals">Before meals</option>
+                      <option value="After meals">After meals</option>
+                      <option value="At bedtime">At bedtime (QHS)</option>
+                      <option value="As needed">As needed (PRN)</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="medDuration" style="font-size: 12px; font-weight: 700; color: #1E293B; display: block; margin-bottom: 6px;">Duration</label>
+                    <input type="text" id="medDuration" name="duration" class="form-control" placeholder="e.g. 7 days, 30 days">
+                  </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 16px;">
+                  <label for="medInstructions" style="font-size: 12px; font-weight: 700; color: #1E293B; display: block; margin-bottom: 6px;">Special Instructions</label>
+                  <input type="text" id="medInstructions" name="instructions" class="form-control" placeholder="e.g. Take with warm water after breakfast">
+                </div>
+
+                <button type="button" id="btnAddMedicine" class="btn-pill-glass" style="color: #7C3AED; border-color: rgba(139, 92, 246, 0.4);">
+                  <i class="fas fa-plus"></i> Add Medicine to Staging List
+                </button>
+              </form>
+
+              <!-- Staged Medications List -->
+              <div class="prescription-staging-box" id="prescriptionList" style="display:none; margin-top: 24px; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.8);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                  <h4 style="font-size: 15px; font-weight: 700; color: #1E293B; margin: 0;"><i class="fas fa-list-ol"></i> Medicines to Prescribe for this Visit</h4>
+                  <span class="badge" style="background: rgba(139, 92, 246, 0.15); color: #7C3AED;">Pending Submission</span>
+                </div>
+                <div class="table-responsive">
+                  <table class="styled-glass-table">
+                    <thead>
+                      <tr>
+                        <th>MEDICATION</th>
+                        <th>DOSAGE</th>
+                        <th>FREQUENCY</th>
+                        <th>DURATION</th>
+                        <th>DIRECTIONS</th>
+                        <th style="width: 60px; text-align: center;">ACTION</th>
+                      </tr>
+                    </thead>
+                    <tbody id="prescriptionListBody">
+                    </tbody>
+                  </table>
+                </div>
+
+                <div style="margin-top: 18px;">
+                  <button type="button" id="btnSubmitPrescription" class="btn-pill-primary" style="background: linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%);">
+                    <i class="fas fa-paper-plane"></i> Finalize & Submit Prescriptions to Patient File
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ==============================================================
+               SECTION 5: FOLLOW-UP APPOINTMENT & MULTI-CHANNEL DISPATCH
+               ============================================================== -->
+          <section class="card clinical-section section-notifications" id="followupSection">
+            <div class="card-header-styled">
+              <div class="header-left-cluster">
+                <span class="section-tag-pill tag-amber">SECTION 5</span>
+                <h2><i class="fas fa-calendar-check"></i> Set Next Follow-Up & Transmit to Patient</h2>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <span class="badge" style="background: rgba(0, 132, 255, 0.12); color: #0084FF;"><i class="fas fa-envelope"></i> Email PDF</span>
+                <span class="badge" style="background: rgba(37, 211, 102, 0.12); color: #128C7E;"><i class="fab fa-whatsapp"></i> WhatsApp</span>
+              </div>
+            </div>
+
+            <div class="card-body" style="padding: 24px;">
+              <p style="font-size: 13px; color: #64748B; margin-bottom: 18px;">
+                Set the patient's next hospital visit and transmit the complete medical summary, official PDF attachment, and digital appointment card directly to their email and WhatsApp phone.
+              </p>
+
+              <form id="followupForm" autocomplete="off" class="followup-form">
+                <!-- Appointment Option Toggle -->
+                <div style="margin-bottom: 16px;">
+                  <label style="display: flex; align-items: center; gap: 10px; font-weight: 700; color: #1E293B; cursor: pointer;">
+                    <input type="checkbox" id="chkScheduleFollowup" checked style="width: 18px; height: 18px;">
+                    <span><i class="fas fa-calendar-plus" style="color: #0084FF;"></i> Schedule Next Follow-Up Consultation Date</span>
+                  </label>
+                </div>
+
+                <!-- Appointment Grid -->
+                <div id="appointmentFieldsBox" style="background: rgba(255, 255, 255, 0.45); border: 1px solid rgba(255, 255, 255, 0.8); border-radius: 18px; padding: 18px; margin-bottom: 20px;">
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+                    <div class="form-group">
+                      <label for="followupDate" style="font-size: 12px; font-weight: 700; color: #1E293B; display: block; margin-bottom: 6px;">
+                        <i class="fas fa-calendar-day" style="color: #0084FF;"></i> Next Appointment Date
+                      </label>
+                      <input type="date" id="followupDate" name="followup_date" class="form-control">
+                      <!-- Quick Date Selection Chips -->
+                      <div style="display: flex; gap: 8px; margin-top: 8px;">
+                        <button type="button" class="btn-pill-glass quick-date-btn" data-days="7" style="padding: 4px 10px; font-size: 11px;">+1 Week</button>
+                        <button type="button" class="btn-pill-glass quick-date-btn" data-days="14" style="padding: 4px 10px; font-size: 11px;">+2 Weeks</button>
+                        <button type="button" class="btn-pill-glass quick-date-btn" data-days="30" style="padding: 4px 10px; font-size: 11px;">+1 Month</button>
+                        <button type="button" class="btn-pill-glass quick-date-btn" data-days="90" style="padding: 4px 10px; font-size: 11px;">+3 Months</button>
+                      </div>
+                    </div>
+
+                    <div class="form-group">
+                      <label for="followupTime" style="font-size: 12px; font-weight: 700; color: #1E293B; display: block; margin-bottom: 6px;">
+                        <i class="fas fa-clock" style="color: #0084FF;"></i> Preferred Time Slot
+                      </label>
+                      <input type="time" id="followupTime" name="followup_time" value="10:00" class="form-control">
+                    </div>
+                  </div>
+
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+                    <div class="form-group">
+                      <label for="followupDept" style="font-size: 12px; font-weight: 700; color: #1E293B; display: block; margin-bottom: 6px;">Department</label>
+                      <input type="text" id="followupDept" name="department" class="form-control" placeholder="e.g. Cardiology" list="followupDeptList">
+                      <datalist id="followupDeptList"></datalist>
+                    </div>
+                    <div class="form-group">
+                      <label for="followupDoctor" style="font-size: 12px; font-weight: 700; color: #1E293B; display: block; margin-bottom: 6px;">Consulting Physician</label>
+                      <input type="text" id="followupDoctor" name="doctor_name" class="form-control" placeholder="e.g. Dr. Sarah Johnson">
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="followupReason" style="font-size: 12px; font-weight: 700; color: #1E293B; display: block; margin-bottom: 6px;">
+                      <i class="fas fa-clipboard-list" style="color: #0084FF;"></i> Clinical Purpose / Instructions for Next Visit
+                    </label>
+                    <input type="text" id="followupReason" name="reason" class="form-control" placeholder="e.g. 1-Month Blood Pressure monitoring and medication tolerance evaluation">
+                  </div>
+                </div>
+
+                <!-- Recipient Channels Verification -->
+                <div style="background: rgba(255, 255, 255, 0.45); border: 1px solid rgba(255, 255, 255, 0.8); border-radius: 18px; padding: 18px; margin-bottom: 20px;">
+                  <div style="margin-bottom: 12px;">
+                    <h4 style="font-size: 14px; font-weight: 700; color: #1E293B; margin: 0;"><i class="fas fa-share-alt"></i> Patient Transmission Channels</h4>
+                    <span style="font-size: 12px; color: #64748B;">Verify or update patient contact details before dispatching</span>
+                  </div>
+
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px;">
+                    <div class="form-group">
+                      <label for="notifEmail" style="font-size: 12px; font-weight: 700; color: #1E293B; display: block; margin-bottom: 6px;">
+                        <i class="fas fa-envelope" style="color: #0084FF;"></i> Patient Email Address
+                      </label>
+                      <input type="email" id="notifEmail" name="target_email" class="form-control" placeholder="patient@example.com">
+                    </div>
+                    <div class="form-group">
+                      <label for="notifPhone" style="font-size: 12px; font-weight: 700; color: #1E293B; display: block; margin-bottom: 6px;">
+                        <i class="fab fa-whatsapp" style="color: #25D366;"></i> Patient WhatsApp / Phone
+                      </label>
+                      <input type="tel" id="notifPhone" name="target_phone" class="form-control" placeholder="+1 (555) 000-0000">
+                    </div>
+                  </div>
+
+                  <div style="display: flex; gap: 16px;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: #1E293B; cursor: pointer;">
+                      <input type="checkbox" id="chkSendEmail" name="send_email" checked style="width: 17px; height: 17px;">
+                      <span>Send PDF & Summary via Email</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: #1E293B; cursor: pointer;">
+                      <input type="checkbox" id="chkSendWhatsApp" name="send_whatsapp" checked style="width: 17px; height: 17px;">
+                      <span>Send Summary via WhatsApp</span>
+                    </label>
+                  </div>
+                </div>
+
+                <button type="submit" id="btnSendFollowup" class="btn-pill-primary" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);">
+                  <i class="fas fa-paper-plane"></i> Transmit Medical Summary & Prescriptions to Patient
+                </button>
+              </form>
+
+              <!-- Delivery Status Card (Appears after sending) -->
+              <div id="notifDeliveryResult" style="display: none; margin-top: 24px; padding: 20px; border-radius: 18px; background: rgba(209, 250, 229, 0.85); border: 1px solid #6EE7B7;">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                  <div style="width: 36px; height: 36px; border-radius: 50%; background: #10B981; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+                    <i class="fas fa-check"></i>
+                  </div>
+                  <div>
+                    <h4 style="font-size: 16px; font-weight: 700; color: #065F46; margin: 0;">Transmitted Successfully to Patient!</h4>
+                    <span style="font-size: 12px; color: #047857;">Appointment booked and notifications delivered</span>
+                  </div>
+                </div>
+                <div id="notifDetailsList" style="font-size: 13.5px; color: #065F46; margin-bottom: 16px;"></div>
+
+                <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                  <a id="btnOpenWhatsApp" target="_blank" class="btn-pill-glass" style="color: #128C7E; border-color: rgba(37, 211, 102, 0.4);">
+                    <i class="fab fa-whatsapp"></i> Open in WhatsApp Web
+                  </a>
+                  <a id="btnPreviewEmail" target="_blank" class="btn-pill-glass" style="color: #0084FF; border-color: rgba(0, 132, 255, 0.4);">
+                    <i class="fas fa-envelope-open-text"></i> View Rendered HTML Email
+                  </a>
+                  <a id="btnDownloadPdf" target="_blank" class="btn-pill-primary" style="background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);">
+                    <i class="fas fa-file-pdf"></i> Download Official Prescription PDF
+                  </a>
+                </div>
+              </div>
+
+              <!-- Notification Delivery Log Archive -->
+              <div style="margin-top: 24px;">
+                <h4 style="font-size: 13px; font-weight: 700; color: #1E293B; margin-bottom: 8px;"><i class="fas fa-history"></i> Transmission Audit Trail</h4>
+                <ul id="patientNotifHistory" style="list-style: none; padding: 0;">
+                  <li style="color: #64748B; font-size: 12.5px;">No previous notifications sent</li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          <!-- ==============================================================
+               SECTION 6: LABORATORY DIAGNOSTICS
+               ============================================================== -->
+          <section class="card clinical-section section-labs" id="labReportsSection">
+            <div class="card-header-styled">
+              <div class="header-left-cluster">
+                <span class="section-tag-pill tag-cyan">SECTION 6</span>
+                <h2><i class="fas fa-flask"></i> Laboratory Diagnostics & Reports</h2>
+              </div>
+              <span class="header-note">Clinical pathology records</span>
+            </div>
+
+            <div class="card-body" style="padding: 24px;">
+              <div class="table-responsive" style="margin-bottom: 20px;">
+                <table class="styled-glass-table" id="labReportsTable">
+                  <thead>
+                    <tr>
+                      <th>TEST NAME</th>
+                      <th>OBSERVED RESULT</th>
+                      <th>REFERENCE RANGE</th>
+                      <th>PATHOLOGIST NOTES</th>
+                      <th>REPORTED DATE</th>
+                    </tr>
+                  </thead>
+                  <tbody id="labReportsBody">
+                    <tr class="empty-row"><td colspan="5" style="text-align: center; padding: 20px;"><i class="fas fa-inbox"></i> No lab reports on file</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Add Lab Report Form -->
+              <div style="background: rgba(255, 255, 255, 0.45); border: 1px solid rgba(255, 255, 255, 0.8); border-radius: 18px; padding: 18px;">
+                <h4 style="font-size: 14px; font-weight: 700; color: #1E293B; margin-bottom: 12px;"><i class="fas fa-plus-circle"></i> Record New Laboratory Report</h4>
+                <form id="labReportForm" class="clinical-form" autocomplete="off">
+                  <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 12px;">
+                    <div class="form-group">
+                      <label for="labTestName" style="font-size: 12px; font-weight: 700; color: #1E293B; display: block; margin-bottom: 6px;">Test Name <span style="color: #DC2626;">*</span></label>
+                      <input type="text" id="labTestName" name="test_name" class="form-control" placeholder="e.g. CBC, Lipid Profile" required>
+                    </div>
+                    <div class="form-group">
+                      <label for="labResult" style="font-size: 12px; font-weight: 700; color: #1E293B; display: block; margin-bottom: 6px;">Test Result</label>
+                      <input type="text" id="labResult" name="result" class="form-control" placeholder="e.g. 14.5 g/dL">
+                    </div>
+                    <div class="form-group">
+                      <label for="labNormalRange" style="font-size: 12px; font-weight: 700; color: #1E293B; display: block; margin-bottom: 6px;">Normal Range</label>
+                      <input type="text" id="labNormalRange" name="normal_range" class="form-control" placeholder="e.g. 12 - 17 g/dL">
+                    </div>
+                  </div>
+                  <div class="form-group" style="margin-bottom: 14px;">
+                    <label for="labNotes" style="font-size: 12px; font-weight: 700; color: #1E293B; display: block; margin-bottom: 6px;">Clinical Remarks</label>
+                    <input type="text" id="labNotes" name="notes" class="form-control" placeholder="e.g. Parameters within normal limits">
+                  </div>
+                  <button type="submit" id="btnAddLabReport" class="btn-pill-glass" style="color: #0891B2; border-color: rgba(6, 182, 212, 0.4);">
+                    <i class="fas fa-plus"></i> Save Lab Result
+                  </button>
+                </form>
+              </div>
+            </div>
+          </section>
+
+          <!-- ==============================================================
+               SECTION 7: LONGITUDINAL VISIT ARCHIVE
+               ============================================================== -->
+          <section class="card clinical-section section-history" id="visitHistorySection">
+            <div class="card-header-styled">
+              <div class="header-left-cluster">
+                <span class="section-tag-pill tag-slate">SECTION 7</span>
+                <h2><i class="fas fa-history"></i> Longitudinal Medical History & Past Visits</h2>
+              </div>
+              <span class="header-note">Chronological EHR archive</span>
+            </div>
+
+            <div class="card-body" style="padding: 24px;">
+              <div class="accordion" id="visitHistoryAccordion">
+                <p class="empty-message" id="noVisitsMsg" style="color: #64748B;"><i class="fas fa-inbox"></i> No previous visits found on file.</p>
+              </div>
+            </div>
+          </section>
+
+        </div><!-- end #patientRecordPanel -->
+      </div><!-- end .doctor-content -->
+
+      <!-- ==============================================================
+           RIGHT: My Patients Today (Sticky Sidebar)
+           ============================================================== -->
+      <aside class="doctor-sidebar" id="myPatientsSidebar">
+        <div class="card queue-sidebar-card">
+          <div class="card-header-styled">
+            <div class="header-left-cluster">
+              <div class="section-icon-circle" style="width: 32px; height: 32px; font-size: 14px;">
+                <i class="fas fa-clipboard-list"></i>
+              </div>
+              <h2>Today's Queue</h2>
+            </div>
+            <span class="badge badge-light-blue" id="sidebarQueueCount">Live</span>
+          </div>
+
+          <div style="padding: 12px 18px; font-size: 11.5px; font-weight: 600; color: #64748B; border-bottom: 1px solid rgba(255, 255, 255, 0.6); background: rgba(255, 255, 255, 0.2);">
+            <i class="fas fa-mouse-pointer" style="color: #0084FF;"></i> Click any patient below to load file:
+          </div>
+
+          <div style="padding: 12px 16px;">
+            <ul class="patient-queue-list styled-queue" id="myPatientsToday" style="list-style: none; padding: 0; display: flex; flex-direction: column; gap: 8px;">
+              <li class="empty-message" style="color: #64748B; font-size: 12.5px; padding: 12px; text-align: center;"><i class="fas fa-inbox"></i> No arrivals yet today</li>
+            </ul>
+          </div>
+        </div>
+      </aside>
+
+    </div><!-- end .doctor-main-grid -->
+
+  </div><!-- end .app-main-content -->
+
+  <script src="/js/auth.js?v=2.4"></script>
+  <script src="/js/dialog.js?v=2.4"></script>
+  <script src="/js/doctor.js?v=2.4"></script>
+</body>
+</html>

@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MediScan NFC — Hospital Patient Management System</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@500;600;700;800&display=swap">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body class="dashboard-body">
+
+  <!-- Floating Left Vertical Sidebar Dock -->
+  <aside class="glass-sidebar-dock">
+    <div class="dock-brand">
+      <div class="dock-brand-icon" title="MediScan NFC Center">
+        <i class="fas fa-sparkles"></i>
+      </div>
+    </div>
+    <div class="dock-nav-items">
+      <a href="index.html" class="dock-item active" title="Dashboard"><i class="fas fa-home"></i></a>
+      <a href="admin.html#patientListSection" class="dock-item" title="Patients Directory"><i
+          class="fas fa-user-friends"></i></a>
+      <a href="admin.html#appointmentSection" class="dock-item" title="Appointments"><i
+          class="fas fa-calendar-alt"></i></a>
+      <a href="index.html" class="dock-item" title="Live Analytics"><i class="fas fa-chart-bar"></i></a>
+      <a href="admin.html" class="dock-item" title="Administration &amp; Cards"><i class="fas fa-cog"></i></a>
+    </div>
+    <div class="dock-bottom-item">
+      <a href="#" class="dock-item" title="System Info"><i class="far fa-question-circle"></i></a>
+    </div>
+  </aside>
+
+  <!-- Main Application Content Container -->
+  <div class="app-main-content">
+
+    <!-- Floating Top Horizontal Glass Capsule Nav -->
+    <nav class="top-glass-nav">
+      <div class="nav-brand">
+        <div class="brand-icon-box"><i class="fas fa-hospital-alt"></i></div>
+        <div class="brand-text">
+          <span class="brand-title">Mediscan NFC</span>
+          <span class="brand-subtitle">HOSPITAL OPERATIONS CENTER</span>
+        </div>
+      </div>
+
+      <div class="segmented-nav-capsule">
+        <a href="index.html" class="nav-pill active"><i class="fas fa-th-large"></i> Dashboard</a>
+        <a href="reception.html" class="nav-pill"><i class="fas fa-door-open"></i> Reception Kiosk</a>
+        <a href="doctor.html" class="nav-pill"><i class="fas fa-user-md"></i> Doctor Desk</a>
+        <a href="admin.html" class="nav-pill"><i class="fas fa-shield-alt"></i> Admin &amp; Cards</a>
+      </div>
+
+      <div class="nav-right-cluster">
+        <span class="system-live-pill"><span class="pulse-dot"></span> System Live <i
+            class="fas fa-heartbeat"></i></span>
+        <div class="user-avatar-pill" title="Clinical Supervisor">JD</div>
+      </div>
+    </nav>
+
+    <!-- Page Header & Floating Glass Date Pill -->
+    <header class="page-header">
+      <div class="header-title-wrap">
+        <div class="header-icon-badge">
+          <i class="fas fa-hospital"></i>
+        </div>
+        <div>
+          <h1>Hospital Operations Dashboard</h1>
+          <p class="subtitle">Live contactless patient flow, NFC check-in metrics, and clinical consultation activity
+          </p>
+        </div>
+      </div>
+      <div class="floating-date-pill">
+        <i class="far fa-calendar-alt"></i>
+        <span id="currentDate"></span>
+        <span id="currentTime"></span>
+      </div>
+    </header>
+
+    <!-- Dashboard Stats Cards (Pastel Washes) -->
+    <section class="dashboard-stats" id="dashboardStats">
+      <div class="stat-card stat-blue">
+        <div class="stat-icon"><i class="fas fa-users"></i></div>
+        <div class="stat-info">
+          <h3 id="statTotalPatients">0</h3>
+          <p>Total Registered Patients</p>
+        </div>
+      </div>
+      <div class="stat-card stat-orange">
+        <div class="stat-icon"><i class="fas fa-calendar-check"></i></div>
+        <div class="stat-info">
+          <h3 id="statTodayAppointments">0</h3>
+          <p>Today's Appointments</p>
+        </div>
+      </div>
+      <div class="stat-card stat-green">
+        <div class="stat-icon"><i class="fas fa-sign-in-alt"></i></div>
+        <div class="stat-info">
+          <h3 id="statTodayArrivals">0</h3>
+          <p>Today's Arrived Patients</p>
+        </div>
+      </div>
+      <div class="stat-card stat-purple">
+        <div class="stat-icon"><i class="fas fa-procedures"></i></div>
+        <div class="stat-info">
+          <h3 id="statActiveVisits">0</h3>
+          <p>Active Clinical Consultations</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Real-Time Patient Flow & NFC Arrivals -->
+    <section class="card dashboard-activity-card">
+      <div class="card-header-glass">
+        <div class="header-left-cluster">
+          <div class="section-icon-circle"><i class="fas fa-satellite-dish"></i></div>
+          <div>
+            <h2>Real-Time Patient Flow &amp; NFC Arrivals</h2>
+            <span class="header-note">Live operations monitor of patient check-ins across clinical stations</span>
+          </div>
+        </div>
+        <div class="header-actions-pill-group">
+          <a href="reception.html" class="btn-pill-primary"><i class="fas fa-door-open"></i> Reception Kiosk</a>
+          <a href="admin.html" class="btn-pill-glass"><i class="fas fa-user-plus"></i> Enroll Patient</a>
+        </div>
+      </div>
+
+      <div class="glass-table-container">
+        <div class="table-responsive">
+          <table class="styled-glass-table" id="dashboardActivityTable">
+            <thead>
+              <tr>
+                <th>+ ARRIVAL TIME</th>
+                <th>PATIENT NAME</th>
+                <th>NFC CARD UID</th>
+                <th>DEPARTMENT</th>
+                <th>PHYSICIAN ASSIGNED</th>
+                <th>STATUS</th>
+              </tr>
+            </thead>
+            <tbody id="dashboardActivityBody">
+              <tr>
+                <td colspan="6" style="text-align: center; padding: 28px; color: #64748B;">
+                  <i class="fas fa-satellite-dish"
+                    style="font-size: 22px; color: #007BFF; margin-bottom: 8px; display: block;"></i>
+                  No patient arrivals recorded yet today. When patients tap their cards at reception, they will stream
+                  here live.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Clinical & Administrative Workstations -->
+    <section style="margin-top: 32px;">
+      <div class="section-headline">
+        <i class="fas fa-th-large"></i> Clinical &amp; Administrative Workstations
+      </div>
+      <div class="workstations-grid">
+        <a href="reception.html" class="workstation-card card-reception">
+          <div>
+            <div class="ws-icon-box"><i class="fas fa-door-open"></i></div>
+            <h3>Reception Kiosk</h3>
+            <p>Contactless NFC card check-in for arriving patients. Tapping instantly verifies appointments, displays
+              critical allergy banners, and manages the triage queue.</p>
+          </div>
+          <span class="ws-action-link">Launch Reception Terminal <i class="fas fa-arrow-right"></i></span>
+          <svg class="ws-watermark-graphic" viewBox="0 0 100 100" fill="none">
+            <rect x="25" y="10" width="50" height="70" rx="8" fill="url(#gKiosk)" fill-opacity="0.2" stroke="#0077B6"
+              stroke-width="2" />
+            <rect x="32" y="18" width="36" height="28" rx="4" fill="#0077B6" fill-opacity="0.35" />
+            <circle cx="50" cy="62" r="6" fill="#0077B6" fill-opacity="0.5" />
+            <path d="M40 80 L60 80 L55 92 L45 92 Z" fill="#0077B6" fill-opacity="0.4" />
+            <defs>
+              <linearGradient id="gKiosk" x1="0" y1="0" x2="100" y2="100">
+                <stop stop-color="#0084FF" />
+                <stop offset="1" stop-color="#00B4D8" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </a>
+
+        <a href="doctor.html" class="workstation-card card-doctor">
+          <div>
+            <div class="ws-icon-box"><i class="fas fa-user-md"></i></div>
+            <h3>Doctor Dashboard</h3>
+            <p>Physician clinical desk. Tap patient NFC card to instantly load complete EHR dossier, vitals, diagnosis,
+              e-prescribing, and send follow-ups via Email &amp; WhatsApp.</p>
+          </div>
+          <span class="ws-action-link">Open Physician Station <i class="fas fa-arrow-right"></i></span>
+          <svg class="ws-watermark-graphic" viewBox="0 0 100 100" fill="none">
+            <path d="M30 20 C30 50, 70 50, 70 20" stroke="#10B981" stroke-width="4" stroke-linecap="round" />
+            <path d="M50 42 L50 65" stroke="#10B981" stroke-width="4" />
+            <circle cx="50" cy="74" r="9" fill="#10B981" fill-opacity="0.4" stroke="#10B981" stroke-width="3" />
+            <circle cx="30" cy="18" r="4" fill="#10B981" />
+            <circle cx="70" cy="18" r="4" fill="#10B981" />
+          </svg>
+        </a>
+
+        <a href="admin.html" class="workstation-card card-admin">
+          <div>
+            <div class="ws-icon-box"><i class="fas fa-shield-alt"></i></div>
+            <h3>Administration &amp; Smart Cards</h3>
+            <p>Register new patients, encode and issue NFC smart cards, schedule appointments, and manage physicians
+              across medical departments.</p>
+          </div>
+          <span class="ws-action-link">Open Admin Registry <i class="fas fa-arrow-right"></i></span>
+          <svg class="ws-watermark-graphic" viewBox="0 0 100 100" fill="none">
+            <rect x="15" y="24" width="70" height="48" rx="8" fill="url(#gCard)" fill-opacity="0.25" stroke="#7C3AED"
+              stroke-width="2" />
+            <rect x="23" y="32" width="16" height="20" rx="3" fill="#7C3AED" fill-opacity="0.4" />
+            <line x1="45" y1="35" x2="72" y2="35" stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round" />
+            <line x1="45" y1="43" x2="65" y2="43" stroke="#7C3AED" stroke-width="2" stroke-linecap="round" />
+            <circle cx="72" cy="55" r="4" fill="#7C3AED" fill-opacity="0.5" />
+            <defs>
+              <linearGradient id="gCard" x1="0" y1="0" x2="100" y2="100">
+                <stop stop-color="#8B5CF6" />
+                <stop offset="1" stop-color="#C084FC" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </a>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+      <div class="footer-content">
+        <p><i class="fas fa-hospital-alt"></i> MediScan NFC — Hospital Patient Management System</p>
+        <p class="footer-meta">Powered by Contactless NFC Technology &bull; Express.js &bull; SQLite EHR Engine</p>
+      </div>
+    </footer>
+
+  </div><!-- end .app-main-content -->
+
+  <script src="/js/auth.js?v=2.3"></script>
+  <script src="/js/dialog.js?v=2.3"></script>
+  <script src="/js/dashboard.js?v=2.3"></script>
+</body>
+
+</html>

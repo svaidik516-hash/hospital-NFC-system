@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin & NFC Cards — MediScan Operations Center</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@500;600;700;800&display=swap">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="admin-portal-body">
+
+  <!-- Main Application Content Container -->
+  <div class="app-main-content">
+
+    <!-- ==============================================================
+         2. FLOATING TOP HORIZONTAL GLASS CAPSULE NAV
+         ============================================================== -->
+    <header class="top-glass-nav" role="banner">
+      <!-- Left Brand Badge -->
+      <a href="index.html" class="nav-brand">
+        <div class="brand-icon-box">
+          <i class="fas fa-hospital-symbol"></i>
+        </div>
+        <div class="brand-text">
+          <span class="brand-title">MediScan NFC</span>
+          <span class="brand-subtitle">HOSPITAL OPERATIONS CENTER</span>
+        </div>
+      </a>
+
+      <!-- Center Segmented Pill Switcher -->
+      <nav class="segmented-nav-capsule" role="navigation" aria-label="Main Navigation">
+        <a href="index.html" class="nav-pill">
+          <i class="fas fa-th-large"></i>
+          <span>Dashboard</span>
+        </a>
+        <a href="reception.html" class="nav-pill">
+          <i class="fas fa-door-open"></i>
+          <span>Reception Kiosk</span>
+        </a>
+        <a href="doctor.html" class="nav-pill">
+          <i class="fas fa-user-md"></i>
+          <span>Doctor Desk</span>
+        </a>
+        <a href="admin.html" class="nav-pill active">
+          <i class="fas fa-shield-alt"></i>
+          <span>Admin & Cards</span>
+        </a>
+      </nav>
+
+      <!-- Right Status Cluster -->
+      <div class="nav-right-cluster">
+        <div class="system-live-pill">
+          <span class="pulse-dot"></span>
+          <span>Admin Online</span>
+          <i class="fas fa-lock" style="font-size: 11px; margin-left: 2px;"></i>
+        </div>
+        <div class="user-avatar-pill" id="userAvatar" title="Click for menu">
+          <span id="userInitials">AD</span>
+        </div>
+        <div class="user-dropdown" id="userDropdown">
+          <div class="dropdown-header">
+            <span id="dropdownName">User Name</span>
+            <span id="dropdownRole" class="badge">Role</span>
+          </div>
+          <hr class="dropdown-divider">
+          <a href="#" class="dropdown-item" onclick="showProfile()"><i class="fas fa-user"></i> Profile</a>
+          <a href="#" class="dropdown-item" onclick="showSettings()"><i class="fas fa-cog"></i> Settings</a>
+          <hr class="dropdown-divider">
+          <a href="#" class="dropdown-item dropdown-danger" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Sign Out</a>
+        </div>
+      </div>
+    </header>
+
+    <!-- ==============================================================
+         3. PAGE HEADER & FLOATING GLASS CLOCK PILL
+         ============================================================== -->
+    <header class="page-header">
+      <div class="header-title-wrap">
+        <div class="header-icon-badge" style="background: linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%);">
+          <i class="fas fa-shield-alt"></i>
+        </div>
+        <div>
+          <h1>Hospital Administration & Smart Cards Registry</h1>
+          <p class="subtitle">Enroll new patients, issue and link physical NFC smart cards, schedule consultations, and manage staff</p>
+        </div>
+      </div>
+
+      <div class="floating-date-pill">
+        <i class="far fa-calendar-alt"></i>
+        <span id="currentDate">Friday, Nov 13, 2026</span>
+        <span id="currentTime" style="margin-left: 6px; font-weight: 700; color: #0084FF;">12:51:41 PM</span>
+      </div>
+    </header>
+
+    <div class="admin-content-stack">
+
+      <!-- ==============================================================
+           SECTION A: PATIENT REGISTRATION & NFC ISSUANCE FORM
+           ============================================================== -->
+      <section class="card admin-form-card" id="registrationSection">
+        <div class="card-header-styled">
+          <div class="header-left-cluster">
+            <div class="section-icon-circle" style="background: rgba(139, 92, 246, 0.15); color: #7C3AED;">
+              <i class="fas fa-user-plus"></i>
+            </div>
+            <div>
+              <h2>Patient Registration & Physical NFC Card Issuance</h2>
+              <span class="header-note">Enroll patient into database and link physical NFC smart card</span>
+            </div>
+          </div>
+          <span class="badge" style="background: rgba(139, 92, 246, 0.12); color: #7C3AED; border: 1px solid rgba(139, 92, 246, 0.3);">
+            <i class="fas fa-id-card"></i> NFC Smart Card
+          </span>
+        </div>
+
+        <div class="card-body" style="padding: 24px;">
+          <form id="patientRegistrationForm" autocomplete="off" class="segmented-admin-form">
+
+            <!-- Fieldset 1: Personal Information -->
+            <div class="form-segment-box">
+              <h3 class="segment-title"><i class="fas fa-user" style="color: #0084FF;"></i> 1. Personal Identity & Demographics</h3>
+              <div class="form-grid-4col">
+                <div class="form-group">
+                  <label for="regFirstName" class="clinical-label">First Name <span class="required">*</span></label>
+                  <input type="text" id="regFirstName" name="first_name" class="form-control" placeholder="e.g. Johnathan" required>
+                </div>
+                <div class="form-group">
+                  <label for="regLastName" class="clinical-label">Last Name <span class="required">*</span></label>
+                  <input type="text" id="regLastName" name="last_name" class="form-control" placeholder="e.g. Vance" required>
+                </div>
+                <div class="form-group">
+                  <label for="regDOB" class="clinical-label">Date of Birth</label>
+                  <input type="date" id="regDOB" name="date_of_birth" class="form-control">
+                </div>
+                <div class="form-group">
+                  <label for="regAge" class="clinical-label">Age</label>
+                  <input type="number" id="regAge" name="age" class="form-control" placeholder="Auto-calculated from DOB" min="0" max="130">
+                </div>
+              </div>
+
+              <div class="form-grid-2col" style="margin-top: 14px;">
+                <div class="form-group">
+                  <label for="regGender" class="clinical-label">Gender</label>
+                  <select id="regGender" name="gender" class="form-control">
+                    <option value="">Select Gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="regBloodGroup" class="clinical-label">Blood Group</label>
+                  <select id="regBloodGroup" name="blood_group" class="form-control">
+                    <option value="">Select Blood Group</option>
+                    <option value="A+">A+</option>
+                    <option value="A-">A-</option>
+                    <option value="B+">B+</option>
+                    <option value="B-">B-</option>
+                    <option value="AB+">AB+</option>
+                    <option value="AB-">AB-</option>
+                    <option value="O+">O+</option>
+                    <option value="O-">O-</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Fieldset 2: Contact & Emergency -->
+            <div class="form-segment-box">
+              <h3 class="segment-title"><i class="fas fa-address-book" style="color: #10B981;"></i> 2. Contact & Emergency Information</h3>
+              <div class="form-grid-2col">
+                <div class="form-group">
+                  <label for="regPhone" class="clinical-label">Patient Phone Number <span class="required">*</span></label>
+                  <input type="tel" id="regPhone" name="contact_phone" class="form-control" placeholder="e.g. +1 (555) 234-5678" required>
+                </div>
+                <div class="form-group">
+                  <label for="regEmail" class="clinical-label">Patient Email Address</label>
+                  <input type="email" id="regEmail" name="contact_email" class="form-control" placeholder="e.g. jvance@example.com">
+                </div>
+              </div>
+
+              <div class="form-grid-3col" style="margin-top: 14px;">
+                <div class="form-group">
+                  <label for="regEmergencyName" class="clinical-label">Emergency Contact Name</label>
+                  <input type="text" id="regEmergencyName" name="emergency_contact_name" class="form-control" placeholder="e.g. Sarah Vance">
+                </div>
+                <div class="form-group">
+                  <label for="regEmergencyPhone" class="clinical-label">Emergency Contact Phone</label>
+                  <input type="tel" id="regEmergencyPhone" name="emergency_contact_phone" class="form-control" placeholder="e.g. +1 (555) 234-9999">
+                </div>
+                <div class="form-group">
+                  <label for="regEmergencyRelation" class="clinical-label">Relationship</label>
+                  <input type="text" id="regEmergencyRelation" name="emergency_contact_relation" class="form-control" placeholder="e.g. Spouse, Parent, Sibling">
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-top: 14px;">
+                <label for="regAddress" class="clinical-label">Residential Address</label>
+                <textarea id="regAddress" name="address" rows="2" class="form-control" placeholder="Full residential mailing address"></textarea>
+              </div>
+            </div>
+
+            <!-- Fieldset 3: Medical Profile -->
+            <div class="form-segment-box">
+              <h3 class="segment-title"><i class="fas fa-notes-medical" style="color: #F59E0B;"></i> 3. Clinical Profile & Medical History</h3>
+              <div class="form-grid-2col">
+                <div class="form-group">
+                  <label for="regAllergies" class="clinical-label"><i class="fas fa-exclamation-triangle text-danger"></i> Allergies (Critical)</label>
+                  <textarea id="regAllergies" name="allergies" rows="2" class="form-control" placeholder="e.g. Penicillin, Peanuts, Sulfa Drugs"></textarea>
+                </div>
+                <div class="form-group">
+                  <label for="regChronic" class="clinical-label"><i class="fas fa-heartbeat" style="color: #D97706;"></i> Chronic Conditions</label>
+                  <textarea id="regChronic" name="chronic_conditions" rows="2" class="form-control" placeholder="e.g. Hypertension, Type 2 Diabetes, Asthma"></textarea>
+                </div>
+              </div>
+              <div class="form-group" style="margin-top: 14px;">
+                <label for="regInsurance" class="clinical-label">Health Insurance Policy ID</label>
+                <input type="text" id="regInsurance" name="insurance_id" class="form-control" placeholder="e.g. INS-BLUE-99214">
+              </div>
+            </div>
+
+            <!-- Fieldset 4: NFC Smart Card Assignment -->
+            <div class="form-segment-box" style="border-color: rgba(0, 132, 255, 0.4); background: rgba(0, 132, 255, 0.04);">
+              <h3 class="segment-title"><i class="fas fa-id-card" style="color: #0084FF;"></i> 4. Physical NFC Smart Card Assignment</h3>
+              <div class="form-group">
+                <label for="regCardUID" class="clinical-label">NFC Card UID (Unique Physical Chip ID) <span class="required">*</span></label>
+                <div class="input-with-btn">
+                  <input type="text" id="regCardUID" name="card_uid" class="form-control font-monospace" placeholder="Scan physical card on USB reader or enter UID (e.g. 04A1B2C3)" required style="font-weight: 700; font-size: 14px; letter-spacing: 0.5px;">
+                </div>
+                <span style="font-size: 12px; color: #64748B; margin-top: 6px; display: inline-flex; align-items: center; gap: 6px;">
+                  <i class="fas fa-satellite-dish" style="color: #0084FF;"></i> Place the patient's physical NFC card on your USB hardware reader, or type the hardware chip UID directly.
+                </span>
+              </div>
+            </div>
+
+            <!-- Submit Action Bar -->
+            <div style="margin-top: 24px;">
+              <button type="submit" id="btnRegisterPatient" class="btn-pill-primary" style="background: linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%); font-size: 14.5px; padding: 12px 28px;">
+                <i class="fas fa-id-card"></i> Register Patient & Issue NFC Smart Card
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- Card Summary Modal -->
+      <div class="modal-overlay" id="cardSummaryModal">
+        <div class="modal">
+          <div class="modal-header">
+            <h2 style="font-size: 16px; font-weight: 700; color: #0F172A; margin: 0;"><i class="fas fa-id-card" style="color: #0084FF;"></i> NFC Smart Card Successfully Issued</h2>
+            <button class="modal-close" id="btnCloseCardSummary"><i class="fas fa-times"></i></button>
+          </div>
+          <div class="modal-body" style="text-align: center;">
+            <div style="background: linear-gradient(135deg, #0B2545 0%, #134074 100%); border-radius: 20px; padding: 24px; color: #fff; max-width: 380px; margin: 0 auto; box-shadow: 0 16px 36px rgba(0, 30, 80, 0.35); text-align: left; position: relative;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                <span style="font-weight: 700; font-size: 13px;"><i class="fas fa-hospital-symbol"></i> MediScan NFC Hospital</span>
+                <i class="fas fa-wifi" style="transform: rotate(90deg); font-size: 18px; color: #38BDF8;"></i>
+              </div>
+              <div style="width: 38px; height: 30px; border-radius: 6px; background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%); margin-bottom: 16px;"></div>
+              <div style="font-family: monospace; font-size: 14px; letter-spacing: 1px; color: #38BDF8; margin-bottom: 12px;" id="summaryCardUID">NFC-XXXX-XXXX</div>
+              <h3 id="summaryPatientName" style="color: #fff; font-size: 18px; font-weight: 700; margin-bottom: 4px;">Patient Name</h3>
+              <p id="summaryPatientMeta" style="color: #94A3B8; font-size: 12px; margin-bottom: 4px;">Age: — | Gender: —</p>
+              <p id="summaryPatientPhone" style="color: #94A3B8; font-size: 12px; margin-bottom: 0;">Contact: —</p>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-pill-primary" id="btnCloseSummary">Done</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==============================================================
+           SECTION B: REGISTERED PATIENTS DIRECTORY
+           ============================================================== -->
+      <section class="card admin-directory-card" id="patientListSection" style="margin-top: 32px;">
+        <div class="card-header-styled">
+          <div class="header-left-cluster">
+            <div class="section-icon-circle" style="background: rgba(0, 132, 255, 0.12); color: #0084FF;">
+              <i class="fas fa-users"></i>
+            </div>
+            <div>
+              <h2>Registered Patients Directory</h2>
+              <span class="header-note">Search and view complete EHR files & physical cards</span>
+            </div>
+          </div>
+          <div style="position: relative; width: 280px;">
+            <input type="text" id="patientSearch" class="form-control" placeholder="Search by name, phone, or card UID…" style="padding-left: 36px;">
+            <i class="fas fa-search" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #64748B;"></i>
+          </div>
+        </div>
+
+        <div class="glass-table-container">
+          <div class="table-responsive">
+            <table class="styled-glass-table" id="patientTable">
+              <thead>
+                <tr>
+                  <th>NFC CARD UID</th>
+                  <th>PATIENT FULL NAME</th>
+                  <th>AGE</th>
+                  <th>GENDER</th>
+                  <th>CONTACT PHONE</th>
+                  <th>ENROLLMENT DATE</th>
+                  <th style="width: 160px; text-align: center;">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody id="patientTableBody">
+                <tr class="empty-row"><td colspan="7" style="text-align: center; padding: 24px;"><i class="fas fa-inbox"></i> Loading patients directory…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Patient Detail Modal -->
+      <div class="modal-overlay" id="patientDetailModal">
+        <div class="modal modal-lg">
+          <div class="modal-header">
+            <h2 style="font-size: 17px; font-weight: 700; color: #0F172A; margin: 0;"><i class="fas fa-user-circle" style="color: #0084FF;"></i> Patient Health Record Dossier</h2>
+            <button class="modal-close" id="btnClosePatientDetail"><i class="fas fa-times"></i></button>
+          </div>
+          <div class="modal-body" id="patientDetailContent">
+            <!-- Populated dynamically by admin.js -->
+          </div>
+          <div class="modal-footer">
+            <button class="btn-pill-glass" id="btnCloseDetail">Close</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==============================================================
+           SECTION C: APPOINTMENT SCHEDULING & DOCTOR MANAGEMENT
+           ============================================================== -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 32px;">
+
+        <!-- Appointment Scheduling Card -->
+        <section class="card" id="appointmentSection">
+          <div class="card-header-styled">
+            <div class="header-left-cluster">
+              <div class="section-icon-circle" style="background: rgba(16, 185, 129, 0.12); color: #059669;">
+                <i class="fas fa-calendar-plus"></i>
+              </div>
+              <div>
+                <h2>Schedule Patient Appointment</h2>
+                <span class="header-note">Book future clinical consultation</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-body" style="padding: 24px;">
+            <form id="appointmentForm" class="clinical-form" autocomplete="off">
+              <div class="form-group" style="margin-bottom: 14px;">
+                <label for="apptPatient" class="clinical-label">Select Patient <span class="required">*</span></label>
+                <select id="apptPatient" name="patient_id" class="form-control" required>
+                  <option value="">Select Patient…</option>
+                </select>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+                <div class="form-group">
+                  <label for="apptDate" class="clinical-label">Appointment Date <span class="required">*</span></label>
+                  <input type="date" id="apptDate" name="appointment_date" class="form-control" required>
+                </div>
+                <div class="form-group">
+                  <label for="apptTime" class="clinical-label">Time Slot</label>
+                  <input type="time" id="apptTime" name="appointment_time" value="10:00" class="form-control">
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+                <div class="form-group">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <label for="apptDepartment" class="clinical-label" style="margin-bottom: 0;">Department</label>
+                    <a href="#departmentSection" style="font-size: 11.5px; color: #0084FF; font-weight: 600; text-decoration: none;">
+                      <i class="fas fa-cog"></i> Edit Departments
+                    </a>
+                  </div>
+                  <select id="apptDepartment" name="department" class="form-control">
+                    <option value="">Loading departments…</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="apptDoctor" class="clinical-label">Assigned Physician</label>
+                  <select id="apptDoctor" name="doctor_name" class="form-control">
+                    <option value="">Select Doctor…</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-bottom: 18px;">
+                <label for="apptReason" class="clinical-label">Appointment Purpose</label>
+                <input type="text" id="apptReason" name="reason" class="form-control" placeholder="e.g. Routine consultation, Blood pressure check">
+              </div>
+
+              <button type="submit" id="btnScheduleAppt" class="btn-pill-primary" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%);">
+                <i class="fas fa-calendar-check"></i> Schedule Appointment
+              </button>
+            </form>
+          </div>
+        </section>
+
+        <!-- Doctor Management Card -->
+        <section class="card" id="doctorManagementSection">
+          <div class="card-header-styled">
+            <div class="header-left-cluster">
+              <div class="section-icon-circle" style="background: rgba(0, 132, 255, 0.12); color: #0084FF;">
+                <i class="fas fa-user-md"></i>
+              </div>
+              <div>
+                <h2>Physician Directory & Staff</h2>
+                <span class="header-note">Manage attending clinical physicians</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-body" style="padding: 24px;">
+            <form id="doctorForm" class="clinical-form" autocomplete="off" style="margin-bottom: 20px;">
+              <div style="display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+                <div class="form-group">
+                  <label for="docName" class="clinical-label">Doctor Name <span class="required">*</span></label>
+                  <input type="text" id="docName" name="name" class="form-control" placeholder="e.g. Dr. Alex Mercer" required>
+                </div>
+                <div class="form-group">
+                  <label for="docDepartment" class="clinical-label">Department</label>
+                  <input type="text" id="docDepartment" name="department" class="form-control" placeholder="e.g. Cardiology" list="hospitalDeptList">
+                  <datalist id="hospitalDeptList"></datalist>
+                </div>
+                <div class="form-group">
+                  <label for="docSpecialization" class="clinical-label">Specialization</label>
+                  <input type="text" id="docSpecialization" name="specialization" class="form-control" placeholder="e.g. Interventional">
+                </div>
+              </div>
+              <div style="display: flex; gap: 10px; align-items: center;">
+                <button type="submit" id="btnAddDoctor" class="btn-pill-primary">
+                  <i class="fas fa-plus"></i> Add Physician
+                </button>
+                <button type="button" id="btnCancelEditDoctor" class="btn btn-outline" style="display: none; border-radius: 20px; padding: 10px 18px; font-size: 13.5px; font-weight: 600;">
+                  <i class="fas fa-times"></i> Cancel
+                </button>
+              </div>
+            </form>
+
+            <div class="table-responsive">
+              <table class="styled-glass-table" id="doctorTable">
+                <thead>
+                  <tr>
+                    <th>DOCTOR NAME</th>
+                    <th>DEPARTMENT</th>
+                    <th>SPECIALIZATION</th>
+                    <th style="text-align: center;">ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody id="doctorTableBody">
+                  <tr class="empty-row"><td colspan="4" style="text-align: center; padding: 20px;"><i class="fas fa-inbox"></i> Loading doctors…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+      </div><!-- end dual grid -->
+
+      <!-- ==============================================================
+           SECTION D: HOSPITAL DEPARTMENTS & CLINICAL WINGS MANAGEMENT
+           ============================================================== -->
+      <section class="card" id="departmentSection" style="margin-top: 32px;">
+        <div class="card-header-styled">
+          <div class="header-left-cluster">
+            <div class="section-icon-circle" style="background: rgba(147, 51, 234, 0.12); color: #9333EA;">
+              <i class="fas fa-sitemap"></i>
+            </div>
+            <div>
+              <h2>Hospital Departments & Clinical Wings</h2>
+              <span class="header-note">Configure customized medical departments and clinical units for your facility</span>
+            </div>
+          </div>
+          <span class="badge badge-light-blue" id="deptCountBadge" style="background: rgba(147, 51, 234, 0.12); color: #9333EA; border-color: rgba(147, 51, 234, 0.25);">Loading…</span>
+        </div>
+        <div class="card-body" style="padding: 24px;">
+          <!-- Add / Edit Department Form -->
+          <form id="departmentForm" class="clinical-form" autocomplete="off" style="margin-bottom: 24px;">
+            <div style="display: grid; grid-template-columns: 1.2fr 2fr auto; gap: 14px; align-items: flex-end;">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label for="deptName" class="clinical-label">Department Name <span class="required">*</span></label>
+                <input type="text" id="deptName" name="name" class="form-control" placeholder="e.g. Oncology & Chemotherapy, Critical Care" required>
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label for="deptDescription" class="clinical-label">Clinical Wing / Scope Description</label>
+                <input type="text" id="deptDescription" name="description" class="form-control" placeholder="e.g. Inpatient Block B, Level 3 — Comprehensive Cancer Center">
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button type="submit" id="btnAddDepartment" class="btn-pill-primary" style="background: linear-gradient(135deg, #9333EA 0%, #7E22CE 100%); white-space: nowrap; height: 46px;">
+                  <i class="fas fa-plus"></i> Add Department
+                </button>
+                <button type="button" id="btnCancelEditDept" class="btn btn-outline" style="display: none; border-radius: 20px; padding: 10px 18px; font-size: 13.5px; font-weight: 600; height: 46px;">
+                  <i class="fas fa-times"></i> Cancel
+                </button>
+              </div>
+            </div>
+          </form>
+
+          <!-- Departments Table -->
+          <div class="table-responsive">
+            <table class="styled-glass-table" id="departmentTable">
+              <thead>
+                <tr>
+                  <th style="width: 28%;">DEPARTMENT NAME</th>
+                  <th>CLINICAL WING / SCOPE</th>
+                  <th style="width: 18%; text-align: center;">PHYSICIANS</th>
+                  <th style="width: 18%; text-align: center;">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody id="departmentTableBody">
+                <tr class="empty-row"><td colspan="4" style="text-align: center; padding: 20px;"><i class="fas fa-inbox"></i> Loading hospital departments…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- end .admin-content-stack -->
+
+  </div><!-- end .app-main-content -->
+
+  <script src="/js/auth.js?v=2.4"></script>
+  <script src="/js/dialog.js?v=2.4"></script>
+  <script src="/js/admin.js?v=2.4"></script>
+</body>
+</html>

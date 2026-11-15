@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reception Kiosk — MediScan NFC Operations Center</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@500;600;700;800&display=swap">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="kiosk-mode-body">
+
+  <!-- Main Application Content Container -->
+  <div class="app-main-content">
+
+    <!-- ==============================================================
+         2. FLOATING TOP HORIZONTAL GLASS CAPSULE NAV
+         ============================================================== -->
+    <header class="top-glass-nav" role="banner">
+      <!-- Left Brand Badge -->
+      <a href="index.html" class="nav-brand">
+        <div class="brand-icon-box">
+          <i class="fas fa-hospital-symbol"></i>
+        </div>
+        <div class="brand-text">
+          <span class="brand-title">MediScan NFC</span>
+          <span class="brand-subtitle">HOSPITAL OPERATIONS CENTER</span>
+        </div>
+      </a>
+
+      <!-- Center Segmented Pill Switcher -->
+      <nav class="segmented-nav-capsule" role="navigation" aria-label="Main Navigation">
+        <a href="index.html" class="nav-pill">
+          <i class="fas fa-th-large"></i>
+          <span>Dashboard</span>
+        </a>
+        <a href="reception.html" class="nav-pill active">
+          <i class="fas fa-door-open"></i>
+          <span>Reception Kiosk</span>
+        </a>
+        <a href="doctor.html" class="nav-pill">
+          <i class="fas fa-user-md"></i>
+          <span>Doctor Desk</span>
+        </a>
+        <a href="admin.html" class="nav-pill">
+          <i class="fas fa-shield-alt"></i>
+          <span>Admin & Cards</span>
+        </a>
+      </nav>
+
+      <!-- Right Status Cluster -->
+      <div class="nav-right-cluster">
+        <div class="system-live-pill">
+          <span class="pulse-dot"></span>
+          <span>Kiosk Online</span>
+          <i class="fas fa-satellite-dish" style="font-size: 11px; margin-left: 2px;"></i>
+        </div>
+        <div class="user-avatar-pill" id="userAvatar" title="Click for menu">
+          <span id="userInitials">RC</span>
+        </div>
+        <div class="user-dropdown" id="userDropdown">
+          <div class="dropdown-header">
+            <span id="dropdownName">User Name</span>
+            <span id="dropdownRole" class="badge">Role</span>
+          </div>
+          <hr class="dropdown-divider">
+          <a href="#" class="dropdown-item" onclick="showProfile()"><i class="fas fa-user"></i> Profile</a>
+          <a href="#" class="dropdown-item" onclick="showSettings()"><i class="fas fa-cog"></i> Settings</a>
+          <hr class="dropdown-divider">
+          <a href="#" class="dropdown-item dropdown-danger" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Sign Out</a>
+        </div>
+      </div>
+    </header>
+
+    <!-- ==============================================================
+         3. PAGE HEADER & FLOATING GLASS CLOCK PILL
+         ============================================================== -->
+    <header class="page-header">
+      <div class="header-title-wrap">
+        <div class="header-icon-badge" style="background: linear-gradient(135deg, #0084FF 0%, #0056B3 100%);">
+          <i class="fas fa-door-open"></i>
+        </div>
+        <div>
+          <h1>Reception & Contactless NFC Arrival Kiosk</h1>
+          <p class="subtitle">Patients tap physical NFC cards upon arrival to auto-verify appointments, triage, and alert doctors</p>
+        </div>
+      </div>
+
+      <div class="floating-date-pill">
+        <i class="far fa-calendar-alt"></i>
+        <span id="currentDate">Friday, Nov 13, 2026</span>
+        <span id="currentTime" style="margin-left: 6px; font-weight: 700; color: #0084FF;">12:51:41 PM</span>
+      </div>
+    </header>
+
+    <!-- ==============================================================
+         4. RECEPTION 2-COLUMN MAIN GRID
+         ============================================================== -->
+    <div class="reception-main-grid">
+
+      <!-- LEFT COLUMN: NFC Tap Reader & Patient Info Panel -->
+      <div class="reception-left-col">
+
+        <!-- NFC Terminal Card -->
+        <section class="card nfc-kiosk-terminal-card" id="nfcScanSection">
+          <div class="card-header-styled">
+            <div class="header-left-cluster">
+              <div class="section-icon-circle">
+                <i class="fas fa-satellite-dish"></i>
+              </div>
+              <div>
+                <h2>Contactless NFC Arrival Reader</h2>
+                <span class="header-note">Hold physical smart card over reader or type UID</span>
+              </div>
+            </div>
+            <span class="badge badge-light-blue"><i class="fas fa-wifi" style="transform: rotate(90deg);"></i> NFC Active</span>
+          </div>
+
+          <div class="card-body" style="padding: 24px;">
+            <!-- Reader Tap Zone -->
+            <div class="nfc-tap-zone" id="nfcScanArea" title="Tap patient card here or scan using USB hardware reader">
+              <div class="radar-pulse-ring"></div>
+              <div class="nfc-icon-wrapper">
+                <i class="fas fa-wifi" style="transform: rotate(90deg);"></i>
+              </div>
+              <h2 class="tap-headline">Tap Patient NFC Card Here</h2>
+              <p class="tap-subtext">Hold the card against the USB hardware reader or mobile sensor</p>
+            </div>
+
+            <!-- Manual Card UID Input -->
+            <div class="nfc-manual-entry" style="margin-top: 16px;">
+              <label for="cardUIDInput" style="font-size: 12.5px; font-weight: 600; color: #475569; display: block; margin-bottom: 8px;">
+                <i class="fas fa-barcode"></i> Or scan / enter Physical NFC Card UID:
+              </label>
+              <div class="input-with-btn">
+                <input type="text" id="cardUIDInput" class="form-control" placeholder="Scan on USB reader or enter Card UID (e.g. 04A1B2C3)" aria-label="Card UID" autofocus>
+                <button type="button" id="btnCheckIn" class="btn-pill-primary" style="white-space: nowrap;">
+                  <i class="fas fa-sign-in-alt"></i> Check In
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Verified Patient Info Panel (Appears on Tap) -->
+        <section class="card patient-arrival-card" id="patientInfoPanel" style="display:none;">
+          <div class="card-header-styled">
+            <div class="header-left-cluster">
+              <div class="section-icon-circle" style="background: rgba(16, 185, 129, 0.14); color: #059669;">
+                <i class="fas fa-check-circle"></i>
+              </div>
+              <div>
+                <h2>Patient Verified & Arrived</h2>
+                <span class="header-note">NFC Card verified with central hospital database</span>
+              </div>
+            </div>
+            <span class="status-pill status-arrived" id="checkInStatus"><span class="green-dot"></span> Checked In ✓</span>
+          </div>
+
+          <div class="card-body" style="padding: 24px;">
+            <!-- Critical Allergy Warning Banner -->
+            <div class="alert-box alert-allergy" id="allergyBanner" style="display:none; margin-bottom: 20px; padding: 14px 18px; border-radius: 16px; background: rgba(254, 226, 226, 0.85); border: 1px solid #FCA5A5; color: #991B1B;">
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 20px; color: #DC2626;"></i>
+                <div>
+                  <strong style="font-size: 13.5px; letter-spacing: 0.3px;">CRITICAL ALLERGY ALERT:</strong>
+                  <div id="allergyText" style="font-size: 14px; font-weight: 700; margin-top: 2px;">—</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Patient Profile Row -->
+            <div style="display: flex; align-items: center; gap: 18px; margin-bottom: 22px; padding-bottom: 18px; border-bottom: 1px solid rgba(255, 255, 255, 0.7);">
+              <div style="width: 56px; height: 56px; border-radius: 18px; background: var(--color-primary-gradient); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: var(--glass-glow-blue);">
+                <i class="fas fa-user-check"></i>
+              </div>
+              <div>
+                <h2 id="patientName" style="font-size: 20px; font-weight: 800; color: #0F172A; margin: 0;">—</h2>
+                <div style="font-size: 12.5px; color: #64748B; margin-top: 3px;">NFC Smart Card Verified &bull; Active Patient Record</div>
+              </div>
+            </div>
+
+            <!-- Details Grid -->
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 20px;">
+              <div style="background: rgba(255, 255, 255, 0.55); border: 1px solid rgba(255, 255, 255, 0.8); border-radius: 14px; padding: 12px 16px;">
+                <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748B; display: block;"><i class="fas fa-birthday-cake" style="color: #0084FF;"></i> Age</span>
+                <strong id="patientAge" style="font-size: 15px; color: #0F172A; font-weight: 700;">—</strong>
+              </div>
+              <div style="background: rgba(255, 255, 255, 0.55); border: 1px solid rgba(255, 255, 255, 0.8); border-radius: 14px; padding: 12px 16px;">
+                <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748B; display: block;"><i class="fas fa-venus-mars" style="color: #8B5CF6;"></i> Gender</span>
+                <strong id="patientGender" style="font-size: 15px; color: #0F172A; font-weight: 700;">—</strong>
+              </div>
+              <div style="background: rgba(255, 255, 255, 0.55); border: 1px solid rgba(255, 255, 255, 0.8); border-radius: 14px; padding: 12px 16px;">
+                <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748B; display: block;"><i class="fas fa-tint" style="color: #EF4444;"></i> Blood Group</span>
+                <span class="blood-pill" id="patientBloodGroup" style="display: inline-block; padding: 2px 10px; border-radius: 12px; background: rgba(239, 68, 68, 0.12); color: #DC2626; font-weight: 700; font-size: 13px;">—</span>
+              </div>
+              <div style="background: rgba(255, 255, 255, 0.55); border: 1px solid rgba(255, 255, 255, 0.8); border-radius: 14px; padding: 12px 16px;">
+                <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748B; display: block;"><i class="fas fa-phone-alt" style="color: #10B981;"></i> Contact Phone</span>
+                <strong id="patientPhone" style="font-size: 13.5px; color: #0F172A; font-weight: 600;">—</strong>
+              </div>
+              <div style="grid-column: span 2; background: rgba(255, 255, 255, 0.55); border: 1px solid rgba(255, 255, 255, 0.8); border-radius: 14px; padding: 12px 16px;">
+                <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748B; display: block;"><i class="fas fa-user-shield" style="color: #F59E0B;"></i> Emergency Contact</span>
+                <strong id="patientEmergency" style="font-size: 13px; color: #0F172A; font-weight: 600;">—</strong>
+              </div>
+            </div>
+
+            <!-- Today's Consultation Details -->
+            <div style="background: rgba(0, 132, 255, 0.06); border: 1px solid rgba(0, 132, 255, 0.2); border-radius: 16px; padding: 16px;">
+              <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: #0077B6; margin-bottom: 8px;">
+                <i class="fas fa-calendar-check"></i> Today's Assigned Consultation:
+              </div>
+              <div id="appointmentInfo" style="font-size: 13.5px; color: #1E293B;">
+                <p>No appointment details loaded.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div><!-- end .reception-left-col -->
+
+      <!-- RIGHT COLUMN: Today's Queue -->
+      <div class="reception-right-col">
+        <section class="card queue-full-card" id="todayQueueSection">
+          <div class="card-header-styled">
+            <div class="header-left-cluster">
+              <div class="section-icon-circle" style="background: rgba(0, 132, 255, 0.12); color: #0084FF;">
+                <i class="fas fa-clipboard-list"></i>
+              </div>
+              <div>
+                <h2>Today's Patient Queue</h2>
+                <span class="header-note">Real-time arrival tracking & physician waiting line</span>
+              </div>
+            </div>
+            <span class="badge badge-light-blue" style="font-size: 13px; font-weight: 700; padding: 6px 14px;" id="queueCount">0</span>
+          </div>
+
+          <div class="glass-table-container">
+            <div class="table-responsive">
+              <table class="styled-glass-table" id="queueTable">
+                <thead>
+                  <tr>
+                    <th>+ TIME</th>
+                    <th>PATIENT NAME & CARD</th>
+                    <th>PHYSICIAN</th>
+                    <th>DEPARTMENT</th>
+                    <th>STATUS</th>
+                  </tr>
+                </thead>
+                <tbody id="queueTableBody">
+                  <tr class="empty-row">
+                    <td colspan="5" style="text-align: center; padding: 32px 16px; color: #64748B;">
+                      <div style="display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; background: rgba(0, 132, 255, 0.08); border: 1px solid rgba(0, 132, 255, 0.2); color: #0084FF; margin-bottom: 8px;">
+                        <i class="fas fa-inbox" style="font-size: 18px;"></i>
+                      </div>
+                      <div style="font-weight: 700; font-size: 14px; color: #1E293B;">No appointments scheduled for today</div>
+                      <div style="font-size: 12px; color: #64748B; margin-top: 2px;">Patient arrivals will be added to this queue automatically upon card tap.</div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </div>
+
+    </div><!-- end .reception-main-grid -->
+
+  </div><!-- end .app-main-content -->
+
+  <script src="/js/auth.js?v=2.3"></script>
+  <script src="/js/dialog.js?v=2.3"></script>
+  <script src="/js/reception.js?v=2.3"></script>
+</body>
+</html>

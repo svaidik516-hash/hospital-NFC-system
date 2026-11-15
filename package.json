@@ -1,0 +1,22 @@
+{
+  "name": "auth-module",
+  "version": "1.0.0",
+  "description": "Authentication module with JWT and bcrypt",
+  "main": "auth.js",
+  "scripts": {
+    "test": "node test-auth.js"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.10",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.4",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^10.5.0",
+    "pdfkit": "^0.20.2",
+    "sql.js": "^1.16.0"
+  }
+}
