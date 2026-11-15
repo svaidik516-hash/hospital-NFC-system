@@ -3,6 +3,25 @@ const path = require('path');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { Pool } = require('pg');
+
+let pgPool = null;
+function getPgPool() {
+  if (pgPool) return pgPool;
+  const databaseUrl = process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL;
+  if (databaseUrl) {
+    try {
+      pgPool = new Pool({
+        connectionString: databaseUrl,
+        ssl: { rejectUnauthorized: false },
+        max: 5,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 10000
+      });
+    } catch (e) {}
+  }
+  return pgPool;
+}
 
 const DATA_DIR = process.env.VERCEL ? path.join('/tmp', 'data') : path.join(__dirname, 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
@@ -107,6 +126,11 @@ function auditLog(action, userId, details) {
     const timestamp = new Date().toISOString();
     const logEntry = `${timestamp} | ${action} | userId:${userId} | ${JSON.stringify(details)}\n`;
     fs.appendFileSync(AUDIT_LOG_FILE, logEntry);
+    const pool = getPgPool();
+    if (pool) {
+      pool.query('INSERT INTO audit_logs (action, user_id, details) VALUES ($1, $2, $3)',
+        [action, userId ? String(userId) : null, details ? JSON.stringify(details) : null]).catch(() => {});
+    }
   } catch (err) {
     console.warn('[Auth] Audit log write failed:', err.message);
   }
@@ -245,6 +269,27 @@ function requireRole(allowedRoles = []) {
 }
 
 async function initAuth() {
+  const pool = getPgPool();
+  if (pool) {
+    try {
+      const res = await pool.query('SELECT * FROM users ORDER BY created_at ASC');
+      if (res && res.rows.length > 0) {
+        const cloudUsers = res.rows.map(r => ({
+          id: r.id,
+          username: r.username,
+          password: r.password,
+          role: r.role,
+          createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString()
+        }));
+        saveUsers(cloudUsers);
+        console.log(`[Auth] Loaded ${cloudUsers.length} users from Supabase.`);
+        return;
+      }
+    } catch (e) {
+      console.warn('[Auth] Supabase users read warning:', e.message);
+    }
+  }
+
   const users = loadUsers();
 
   if (users.length === 0) {
@@ -265,6 +310,12 @@ async function initAuth() {
       };
       users.push(user);
       auditLog('USER_CREATED', user.id, { username: user.username, role: user.role });
+      if (pool) {
+        try {
+          await pool.query('INSERT INTO users (id, username, password, role) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING',
+            [user.id, user.username, user.password, user.role]);
+        } catch (e) {}
+      }
     }
 
     saveUsers(users);
