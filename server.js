@@ -1017,19 +1017,42 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('UNHANDLED REJECTION at:', promise, 'reason:', reason);
 });
 
-// ─── START SERVER ────────────────────────────────────────────────────────────────
+// ─── START SERVER / VERCEL EXPORT ────────────────────────────────────────────────
 
-db.initDB().then(() => {
-  const server = app.listen(PORT, () => {
-    console.log(`NFC Hospital Management System running at http://localhost:${PORT}`);
-    console.log(`API available at http://localhost:${PORT}/api`);
-    console.log('[Security] Helmet, Rate Limiting, Auth & Encryption enabled');
-  });
+let isDbInitialized = false;
+async function ensureDb() {
+  if (!isDbInitialized) {
+    await db.initDB();
+    isDbInitialized = true;
+  }
+}
 
-  server.on('error', (err) => {
-    console.error('Server HTTP error:', err);
-  });
-}).catch(err => {
-  console.error('Failed to initialise database:', err);
-  process.exit(1);
+// Middleware to ensure database is ready on serverless environments
+app.use(async (req, res, next) => {
+  try {
+    await ensureDb();
+    next();
+  } catch (err) {
+    console.error('Database init error:', err);
+    res.status(500).json({ error: 'Database initialization failed' });
+  }
 });
+
+if (!process.env.VERCEL) {
+  ensureDb().then(() => {
+    const server = app.listen(PORT, () => {
+      console.log(`NFC Hospital Management System running at http://localhost:${PORT}`);
+      console.log(`API available at http://localhost:${PORT}/api`);
+      console.log('[Security] Helmet, Rate Limiting, Auth & Encryption enabled');
+    });
+
+    server.on('error', (err) => {
+      console.error('Server HTTP error:', err);
+    });
+  }).catch(err => {
+    console.error('Failed to initialise database:', err);
+    process.exit(1);
+  });
+}
+
+module.exports = app;

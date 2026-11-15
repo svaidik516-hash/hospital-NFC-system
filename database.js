@@ -24,8 +24,8 @@ const {
 const MASTER_KEY = getMasterKey();
 module.exports.MASTER_KEY = MASTER_KEY;
 
-// Ensure data directory exists
-const dataDir = path.join(__dirname, 'data');
+// Ensure data directory exists (use writable /tmp directory when deployed on Vercel)
+const dataDir = process.env.VERCEL ? path.join('/tmp', 'data') : path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
