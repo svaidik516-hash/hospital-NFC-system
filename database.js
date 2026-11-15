@@ -527,7 +527,7 @@ function getPatientByCardUIDRaw(uid) {
   return get('SELECT * FROM patients WHERE LOWER(card_uid) = LOWER(?)', [cleanUid]);
 }
 
-function createPatient(data) {
+async function createPatient(data) {
   // Encrypt sensitive fields at rest
   const sensitive = [
     'allergies', 'chronic_conditions', 'insurance_id', 'address',
@@ -566,7 +566,7 @@ function createPatient(data) {
   ]);
   const newPatient = get('SELECT * FROM patients WHERE id = ?', [lastId]);
   if (newPatient) {
-    pgQuery(`
+    await pgQuery(`
       INSERT INTO patients (id, card_uid, first_name, last_name, date_of_birth, age, gender,
         blood_group, contact_phone, contact_email, emergency_contact_name, emergency_contact_phone,
         emergency_contact_relation, address, allergies, chronic_conditions, insurance_id)
@@ -589,7 +589,7 @@ function createPatient(data) {
   return newPatient;
 }
 
-function updatePatient(id, data) {
+async function updatePatient(id, data) {
   const allowedFields = [
     'card_uid', 'first_name', 'last_name', 'date_of_birth', 'age', 'gender',
     'blood_group', 'contact_phone', 'contact_email', 'emergency_contact_name',
@@ -620,7 +620,7 @@ function updatePatient(id, data) {
   run(`UPDATE patients SET ${sets.join(', ')} WHERE id = ?`, values);
   const updated = get('SELECT * FROM patients WHERE id = ?', [id]);
   if (updated) {
-    pgQuery(`
+    await pgQuery(`
       UPDATE patients SET
         card_uid = $2, first_name = $3, last_name = $4, date_of_birth = $5, age = $6, gender = $7,
         blood_group = $8, contact_phone = $9, contact_email = $10, emergency_contact_name = $11,
@@ -651,14 +651,14 @@ function searchPatients(query) {
   `, [q, q, q, q]);
 }
 
-function deletePatient(id) {
+async function deletePatient(id) {
   run('DELETE FROM notifications WHERE patient_id = ?', [id]);
   run('DELETE FROM lab_reports WHERE patient_id = ?', [id]);
   run('DELETE FROM prescriptions WHERE patient_id = ?', [id]);
   run('DELETE FROM visits WHERE patient_id = ?', [id]);
   run('DELETE FROM appointments WHERE patient_id = ?', [id]);
   const res = run('DELETE FROM patients WHERE id = ?', [id]);
-  pgQuery('DELETE FROM patients WHERE id = $1', [id]);
+  await pgQuery('DELETE FROM patients WHERE id = $1', [id]);
   return res.changes > 0;
 }
 
@@ -981,7 +981,7 @@ function getDoctorById(id) {
   return get('SELECT * FROM doctors WHERE id = ?', [id]);
 }
 
-function createDoctor(data) {
+async function createDoctor(data) {
   const { lastId } = run(`
     INSERT INTO doctors (name, department, specialization, contact, status)
     VALUES (?, ?, ?, ?, ?)
@@ -994,7 +994,7 @@ function createDoctor(data) {
   ]);
   const newDoc = get('SELECT * FROM doctors WHERE id = ?', [lastId]);
   if (newDoc) {
-    pgQuery(`
+    await pgQuery(`
       INSERT INTO doctors (id, name, department, specialization, contact, status)
       VALUES ($1, $2, $3, $4, $5, $6)
       ON CONFLICT (id) DO UPDATE SET
@@ -1005,7 +1005,7 @@ function createDoctor(data) {
   return newDoc;
 }
 
-function updateDoctor(id, data) {
+async function updateDoctor(id, data) {
   const allowed = ['name', 'department', 'specialization', 'contact', 'status'];
   const sets = [];
   const params = [];
@@ -1025,18 +1025,18 @@ function updateDoctor(id, data) {
   run(`UPDATE doctors SET ${sets.join(', ')} WHERE id = ?`, params);
   const updated = getDoctorById(id);
   if (updated) {
-    pgQuery(`
+    await pgQuery(`
       UPDATE doctors SET name = $2, department = $3, specialization = $4, contact = $5, status = $6 WHERE id = $1
     `, [updated.id, updated.name, updated.department, updated.specialization, updated.contact, updated.status]);
   }
   return updated;
 }
 
-function deleteDoctor(id) {
+async function deleteDoctor(id) {
   const doc = getDoctorById(id);
   if (!doc) return false;
   run('DELETE FROM doctors WHERE id = ?', [id]);
-  pgQuery('DELETE FROM doctors WHERE id = $1', [id]);
+  await pgQuery('DELETE FROM doctors WHERE id = $1', [id]);
   return true;
 }
 

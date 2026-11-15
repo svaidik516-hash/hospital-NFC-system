@@ -313,7 +313,7 @@ app.get('/api/patients/card/:uid', requireDoctorOrReception, auditMiddleware('PA
 });
 
 // POST /api/patients - create patient (reception, admin)
-app.post('/api/patients', requireReception, auditMiddleware('PATIENT_CREATED', (req, res) => ({ patientId: res.locals?.patientId || 'unknown' })), (req, res) => {
+app.post('/api/patients', requireReception, auditMiddleware('PATIENT_CREATED', (req, res) => ({ patientId: res.locals?.patientId || 'unknown' })), async (req, res) => {
   try {
     const data = req.body;
     if (!data.first_name || !data.last_name) {
@@ -323,7 +323,7 @@ app.post('/api/patients', requireReception, auditMiddleware('PATIENT_CREATED', (
       return res.status(400).json({ error: 'NFC Card UID is required. Please tap/scan the patient physical NFC card or enter the UID.' });
     }
     data.card_uid = data.card_uid.trim();
-    const patient = db.createPatient(data);
+    const patient = await db.createPatient(data);
     res.locals.patientId = patient.id;
     res.status(201).json(patient);
   } catch (err) {
@@ -336,9 +336,9 @@ app.post('/api/patients', requireReception, auditMiddleware('PATIENT_CREATED', (
 });
 
 // PUT /api/patients/:id - update patient (admin only)
-app.put('/api/patients/:id', requireAdmin, auditMiddleware('PATIENT_UPDATED', (req) => ({ patientId: req.params.id })), (req, res) => {
+app.put('/api/patients/:id', requireAdmin, auditMiddleware('PATIENT_UPDATED', (req) => ({ patientId: req.params.id })), async (req, res) => {
   try {
-    const patient = db.updatePatient(parseInt(req.params.id), req.body);
+    const patient = await db.updatePatient(parseInt(req.params.id), req.body);
     if (!patient) {
       return res.status(404).json({ error: 'Patient not found' });
     }
@@ -350,9 +350,9 @@ app.put('/api/patients/:id', requireAdmin, auditMiddleware('PATIENT_UPDATED', (r
 });
 
 // DELETE /api/patients/:id - delete patient (admin only)
-app.delete('/api/patients/:id', requireAdmin, auditMiddleware('PATIENT_DELETED', (req) => ({ patientId: req.params.id })), (req, res) => {
+app.delete('/api/patients/:id', requireAdmin, auditMiddleware('PATIENT_DELETED', (req) => ({ patientId: req.params.id })), async (req, res) => {
   try {
-    const success = db.deletePatient(parseInt(req.params.id));
+    const success = await db.deletePatient(parseInt(req.params.id));
     if (!success) {
       return res.status(404).json({ error: 'Patient not found' });
     }
@@ -599,13 +599,13 @@ app.get('/api/doctors', auth.requireAuth(), (req, res) => {
 });
 
 // POST /api/doctors - add doctor (admin only)
-app.post('/api/doctors', requireAdmin, auditMiddleware('DOCTOR_CREATED', (req, res) => ({ doctorId: res.locals?.doctorId })), (req, res) => {
+app.post('/api/doctors', requireAdmin, auditMiddleware('DOCTOR_CREATED', (req, res) => ({ doctorId: res.locals?.doctorId })), async (req, res) => {
   try {
     const data = req.body;
     if (!data.name) {
       return res.status(400).json({ error: 'Doctor name is required' });
     }
-    const doctor = db.createDoctor(data);
+    const doctor = await db.createDoctor(data);
     res.locals.doctorId = doctor.id;
     res.status(201).json(doctor);
   } catch (err) {
@@ -629,7 +629,7 @@ app.get('/api/doctors/:id', auth.requireAuth(), (req, res) => {
 });
 
 // PUT /api/doctors/:id - update doctor (admin only)
-app.put('/api/doctors/:id', requireAdmin, auditMiddleware('DOCTOR_UPDATED', (req, res) => ({ doctorId: req.params.id })), (req, res) => {
+app.put('/api/doctors/:id', requireAdmin, auditMiddleware('DOCTOR_UPDATED', (req, res) => ({ doctorId: req.params.id })), async (req, res) => {
   try {
     const data = req.body;
     if (data.name !== undefined && !data.name.trim()) {
@@ -639,7 +639,7 @@ app.put('/api/doctors/:id', requireAdmin, auditMiddleware('DOCTOR_UPDATED', (req
     if (!existing) {
       return res.status(404).json({ error: 'Doctor not found' });
     }
-    const updated = db.updateDoctor(req.params.id, data);
+    const updated = await db.updateDoctor(req.params.id, data);
     res.json(updated);
   } catch (err) {
     console.error('PUT /api/doctors/:id error:', err.message);
@@ -648,18 +648,28 @@ app.put('/api/doctors/:id', requireAdmin, auditMiddleware('DOCTOR_UPDATED', (req
 });
 
 // DELETE /api/doctors/:id - delete doctor (admin only)
-app.delete('/api/doctors/:id', requireAdmin, auditMiddleware('DOCTOR_DELETED', (req, res) => ({ doctorId: req.params.id })), (req, res) => {
+app.delete('/api/doctors/:id', requireAdmin, auditMiddleware('DOCTOR_DELETED', (req, res) => ({ doctorId: req.params.id })), async (req, res) => {
   try {
     const existing = db.getDoctorById(req.params.id);
     if (!existing) {
       return res.status(404).json({ error: 'Doctor not found' });
     }
-    db.deleteDoctor(req.params.id);
+    await db.deleteDoctor(req.params.id);
     res.json({ message: 'Doctor deleted successfully', id: parseInt(req.params.id) });
   } catch (err) {
     console.error('DELETE /api/doctors/:id error:', err.message);
     res.status(500).json({ error: 'Failed to delete doctor' });
   }
+});
+
+// ─── Health / Status Endpoint ──────────────────────────────────────────────────
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    database: process.env.DATABASE_URL ? 'supabase-cloud' : 'local-memory',
+    environment: process.env.VERCEL ? 'vercel' : 'local',
+    timestamp: new Date().toISOString()
+  });
 });
 
 // ─── DEPARTMENT ROUTES ────────────────────────────────────────────────────────────
