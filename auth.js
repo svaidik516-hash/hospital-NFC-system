@@ -294,7 +294,10 @@ async function initAuth() {
           id: r.id,
           username: r.username,
           password: r.password,
+          passwordHash: r.password,
           role: r.role,
+          name: r.username === 'admin' ? 'System Administrator' : (r.username === 'doctor' ? 'Attending Physician' : 'Reception Desk'),
+          email: `${r.username}@mediscan.local`,
           createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString()
         }));
         saveUsers(cloudUsers);
@@ -321,7 +324,10 @@ async function initAuth() {
         id: crypto.randomUUID(),
         username: u.username,
         password: hashedPassword,
+        passwordHash: hashedPassword,
         role: u.role,
+        name: u.username === 'admin' ? 'System Administrator' : (u.username === 'doctor' ? 'Attending Physician' : 'Reception Desk'),
+        email: `${u.username}@mediscan.local`,
         createdAt: new Date().toISOString()
       };
       users.push(user);
@@ -356,7 +362,13 @@ async function authenticateUser(username, password) {
     return null;
   }
 
-  const valid = await verifyPassword(password, user.passwordHash);
+  const hash = user.passwordHash || user.password;
+  if (!hash) {
+    auditLog('LOGIN_FAILED', user.id, { username, reason: 'invalid_password' });
+    return null;
+  }
+
+  const valid = await verifyPassword(password, hash);
   if (!valid) {
     auditLog('LOGIN_FAILED', user.id, { username, reason: 'invalid_password' });
     return null;

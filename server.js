@@ -325,7 +325,8 @@ app.post('/api/patients', requireReception, auditMiddleware('PATIENT_CREATED', (
     data.card_uid = data.card_uid.trim();
     const patient = await db.createPatient(data);
     res.locals.patientId = patient.id;
-    res.status(201).json(patient);
+    const canDecrypt = getDecryptPermission(req);
+    res.status(201).json(db.maybeDecryptPatient ? db.maybeDecryptPatient(patient, canDecrypt) : patient);
   } catch (err) {
     console.error('POST /api/patients error:', err.message);
     if (err.message && err.message.includes('UNIQUE constraint')) {
@@ -418,7 +419,8 @@ app.post('/api/prescriptions', requireDoctor, auditMiddleware('PRESCRIPTION_CREA
     }
     const prescription = db.createPrescription(data);
     res.locals.prescriptionId = prescription.id;
-    res.status(201).json(prescription);
+    const canDecrypt = getDecryptPermission(req);
+    res.status(201).json(db.maybeDecryptPrescription ? db.maybeDecryptPrescription(prescription, canDecrypt) : prescription);
   } catch (err) {
     console.error('POST /api/prescriptions error:', err.message);
     res.status(500).json({ error: 'Failed to create prescription' });
