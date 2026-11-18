@@ -80,8 +80,16 @@ async function getTransporter() {
 
 function formatDate(dateStr) {
   if (!dateStr) return 'Not scheduled';
+  if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr.trim())) {
+    const [y, m, d] = dateStr.trim().split('-').map(Number);
+    const dateObj = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+    return dateObj.toLocaleDateString('en-US', {
+      timeZone: 'UTC',
+      weekday: 'long', year: 'numeric', month: 'short', day: 'numeric'
+    });
+  }
   const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return dateStr;
+  if (isNaN(d.getTime())) return String(dateStr);
   return d.toLocaleDateString('en-US', {
     weekday: 'long', year: 'numeric', month: 'short', day: 'numeric'
   });

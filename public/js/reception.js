@@ -92,6 +92,19 @@ async function initReception() {
   const queueCountEl = document.getElementById('queueCount');
   const queueTableBody = document.getElementById('queueTableBody');
 
+  function formatDate(dateStr) {
+    if (!dateStr) return '—';
+    if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr.trim())) {
+      const [y, m, d] = dateStr.trim().split('-').map(Number);
+      const dateObj = new Date(y, m - 1, d);
+      return dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+    const cleanStr = String(dateStr).trim().replace(' ', 'T');
+    const d = new Date(cleanStr);
+    if (isNaN(d.getTime())) return String(dateStr);
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+
   // Clock elements
   const dateEl = document.getElementById('currentDate');
   const timeEl = document.getElementById('currentTime');

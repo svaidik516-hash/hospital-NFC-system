@@ -76,8 +76,21 @@
       <div class="floating-date-pill">
         <i class="far fa-calendar-alt"></i>
         <span id="currentDate"></span>
-        <span id="currentTime"></span>
+        <span id="currentTime" style="margin-left: 6px; font-weight: 700; color: #0084FF;"></span>
       </div>
+      <script>
+        (function() {
+          function tick() {
+            var d = document.getElementById('currentDate');
+            var t = document.getElementById('currentTime');
+            var now = new Date();
+            if (d) d.textContent = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' });
+            if (t) t.textContent = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          }
+          tick();
+          setInterval(tick, 1000);
+        })();
+      </script>
     </header>
 
     <!-- Dashboard Stats Cards (Pastel Washes) -->

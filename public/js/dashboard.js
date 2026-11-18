@@ -109,7 +109,7 @@ async function initDashboard() {
         } else {
           activityBody.innerHTML = arrivedList.map(a => `
             <tr class="table-capsule-row">
-              <td><span class="arrival-time-cell"><span class="blue-dot"></span> ${a.arrived_at ? new Date(a.arrived_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (a.appointment_time || 'Walk-in')}</span></td>
+              <td><span class="arrival-time-cell"><span class="blue-dot"></span> ${a.arrived_at ? new Date(String(a.arrived_at).replace(' ', 'T')).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (a.appointment_time || 'Walk-in')}</span></td>
               <td><strong>${a.first_name} ${a.last_name}</strong></td>
               <td><span class="nfc-chip-pill"><i class="fas fa-wifi" style="transform: rotate(90deg); font-size: 11px;"></i> ${a.card_uid || 'NFC'}</span></td>
               <td>${a.department || 'General'}</td>

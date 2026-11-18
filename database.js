@@ -15,7 +15,12 @@ try {
 }
 const path = require('path');
 const fs = require('fs');
-const { Pool } = require('pg');
+const { Pool, types } = require('pg');
+
+// Parse PostgreSQL DATE (OID 1082) as raw 'YYYY-MM-DD' string to prevent timezone offset shifts
+if (types && typeof types.setTypeParser === 'function') {
+  types.setTypeParser(1082, (val) => val);
+}
 
 let pgPool = null;
 

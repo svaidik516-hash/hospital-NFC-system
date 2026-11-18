@@ -75,14 +75,27 @@ async function initDoctorDesk() {
     }, 4000);
   }
 
+  function getLocalDateStr(d = new Date()) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
   function formatDate(dateStr) {
     if (!dateStr) return '—';
-    return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    const cleanStr = String(dateStr).trim().replace(' ', 'T');
+    const d = new Date(cleanStr);
+    if (isNaN(d.getTime())) return String(dateStr);
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   }
 
   function formatDateTime(dateStr) {
     if (!dateStr) return '—';
-    return new Date(dateStr).toLocaleString('en-US', {
+    const cleanStr = String(dateStr).trim().replace(' ', 'T');
+    const d = new Date(cleanStr);
+    if (isNaN(d.getTime())) return String(dateStr);
+    return d.toLocaleString('en-US', {
       year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
     });
   }
@@ -895,13 +908,13 @@ async function initDoctorDesk() {
     if (followupReason) followupReason.value = 'Follow-up consultation and medication review';
 
     // Default next appointment to 14 days from today
-    if (followupDate && !followupDate.value) {
-      const d = new Date();
-      d.setDate(d.getDate() + 14);
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      followupDate.value = `${y}-${m}-${day}`;
+    if (followupDate) {
+      followupDate.min = getLocalDateStr();
+      if (!followupDate.value) {
+        const d = new Date();
+        d.setDate(d.getDate() + 14);
+        followupDate.value = getLocalDateStr(d);
+      }
     }
   }
 
@@ -911,11 +924,8 @@ async function initDoctorDesk() {
       const days = parseInt(btn.dataset.days);
       const d = new Date();
       d.setDate(d.getDate() + days);
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
       const followupDate = document.getElementById('followupDate');
-      if (followupDate) followupDate.value = `${y}-${m}-${day}`;
+      if (followupDate) followupDate.value = getLocalDateStr(d);
       showToast(`Follow-up set to ${days} days from today`, 'info');
     });
   });

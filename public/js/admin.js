@@ -75,14 +75,27 @@ async function initAdmin() {
     }, 4000);
   }
 
+  function getLocalDateStr(d = new Date()) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
   function formatDate(dateStr) {
     if (!dateStr) return '—';
-    return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    const cleanStr = String(dateStr).trim().replace(' ', 'T');
+    const d = new Date(cleanStr);
+    if (isNaN(d.getTime())) return String(dateStr);
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   }
 
   function formatDateTime(dateStr) {
     if (!dateStr) return '—';
-    return new Date(dateStr).toLocaleString('en-US', {
+    const cleanStr = String(dateStr).trim().replace(' ', 'T');
+    const d = new Date(cleanStr);
+    if (isNaN(d.getTime())) return String(dateStr);
+    return d.toLocaleString('en-US', {
       year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
     });
   }
@@ -196,6 +209,7 @@ async function initAdmin() {
   }
 
   if (regDOB) {
+    regDOB.max = getLocalDateStr();
     regDOB.addEventListener('change', () => {
       const dob = new Date(regDOB.value);
       if (isNaN(dob)) return;
@@ -572,8 +586,10 @@ async function initAdmin() {
 
   // ── Appointment Scheduling ─────────────────────────────────────────
   if (apptDate) {
-    // Default to today's date
-    apptDate.value = new Date().toISOString().split('T')[0];
+    // Default to today's local date
+    const todayStr = getLocalDateStr();
+    apptDate.value = todayStr;
+    apptDate.min = todayStr;
   }
 
   if (apptPatient) {
@@ -607,7 +623,11 @@ async function initAdmin() {
         }
         showToast('Appointment successfully scheduled!', 'success');
         appointmentForm.reset();
-        if (apptDate) apptDate.value = new Date().toISOString().split('T')[0];
+        if (apptDate) {
+          const todayStr = getLocalDateStr();
+          apptDate.value = todayStr;
+          apptDate.min = todayStr;
+        }
       } catch (err) {
         showToast(err.message || 'Error scheduling appointment', 'error');
       }
