@@ -181,22 +181,39 @@ async function initDoctorDesk() {
   }
 
   // ── Load Doctors ──────────────────────────────────────────────────
+  function populateDoctorDropdown(doctors) {
+    const el = document.getElementById('doctorSelect') || doctorSelect;
+    if (el && Array.isArray(doctors)) {
+      const prevSelected = el.value || selectedDoctor;
+      el.innerHTML = '<option value="">Select Doctor Profile…</option>' +
+        doctors.map(d => `<option value="${d.name}">${d.name} (${d.department || ''})</option>`).join('');
+      if (prevSelected && Array.from(el.options).some(o => o.value === prevSelected)) {
+        el.value = prevSelected;
+      }
+    }
+  }
+
   async function loadDoctors() {
+    try {
+      const cached = localStorage.getItem('mediscan_cached_doctors');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          populateDoctorDropdown(parsed);
+        }
+      }
+    } catch (e) {}
+
     try {
       const response = await safeFetch('/api/doctors');
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
       const doctors = await response.json();
-      const el = document.getElementById('doctorSelect') || doctorSelect;
-      if (el) {
-        const prevSelected = el.value || selectedDoctor;
-        el.innerHTML = '<option value="">Select Doctor Profile…</option>' +
-          doctors.map(d => `<option value="${d.name}">${d.name} (${d.department || ''})</option>`).join('');
-        if (prevSelected && Array.from(el.options).some(o => o.value === prevSelected)) {
-          el.value = prevSelected;
-        }
-      }
+      try {
+        localStorage.setItem('mediscan_cached_doctors', JSON.stringify(doctors));
+      } catch (e) {}
+      populateDoctorDropdown(doctors);
     } catch (err) {
       console.error('Failed to load doctors:', err);
     }
@@ -214,15 +231,32 @@ async function initDoctorDesk() {
   }
 
   // ── Load Hospital Departments for Follow-up Suggestion ────────────
+  function populateDeptDatalist(depts) {
+    const listEl = document.getElementById('followupDeptList');
+    if (listEl && Array.isArray(depts)) {
+      listEl.innerHTML = depts.map(d => `<option value="${d.name}">`).join('');
+    }
+  }
+
   async function loadDepartments() {
+    try {
+      const cached = localStorage.getItem('mediscan_cached_departments');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          populateDeptDatalist(parsed);
+        }
+      }
+    } catch (e) {}
+
     try {
       const response = await safeFetch('/api/departments');
       if (!response.ok) return;
       const depts = await response.json();
-      const listEl = document.getElementById('followupDeptList');
-      if (listEl && Array.isArray(depts)) {
-        listEl.innerHTML = depts.map(d => `<option value="${d.name}">`).join('');
-      }
+      try {
+        localStorage.setItem('mediscan_cached_departments', JSON.stringify(depts));
+      } catch (e) {}
+      populateDeptDatalist(depts);
     } catch (e) {}
   }
   loadDepartments();
@@ -980,7 +1014,11 @@ async function initDoctorDesk() {
           resultCard.scrollIntoView({ behavior: 'smooth' });
         }
 
-        showToast('Appointment scheduled & summary dispatched to Email & WhatsApp!', 'success');
+        if (data.email && data.email.success === false) {
+          showToast(`Appointment scheduled, but email failed: ${data.email.error || 'Delivery issue'}`, 'warning');
+        } else {
+          showToast('Appointment scheduled & summary dispatched to Email & WhatsApp!', 'success');
+        }
         loadPatientNotificationHistory(currentPatient.id);
       } catch (err) {
         showToast(err.message || 'Error sending notifications', 'error');

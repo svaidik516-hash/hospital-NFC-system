@@ -329,8 +329,54 @@ async function initReception() {
   }
 
   // ── Load Today's Queue ────────────────────────────────────────────
+  function renderQueue(appointments) {
+    if (queueCountEl) {
+      queueCountEl.textContent = appointments.length;
+    }
+
+    if (!appointments || appointments.length === 0) {
+      queueTableBody.innerHTML = `
+        <tr class="empty-row">
+          <td colspan="5"><i class="fas fa-inbox"></i> No appointments scheduled for today</td>
+        </tr>
+      `;
+      return;
+    }
+
+    queueTableBody.innerHTML = appointments.map(a => {
+      const isArrived = a.status === 'arrived';
+      const statusHtml = isArrived
+        ? `<span class="status-pill status-arrived"><span class="green-dot"></span> Arrived &amp; Waiting</span>`
+        : `<span class="status-pill status-scheduled"><span class="orange-dot"></span> Scheduled</span>`;
+
+      return `
+        <tr class="table-capsule-row">
+          <td><span class="arrival-time-cell"><span class="blue-dot"></span> ${a.appointment_time || 'Walk-in'}</span></td>
+          <td>
+            <div style="font-weight: 700; color: #0F172A;">${a.first_name} ${a.last_name}</div>
+            <span class="nfc-chip-pill" style="margin-top: 4px;"><i class="fas fa-wifi" style="transform: rotate(90deg); font-size: 10px;"></i> ${a.card_uid || 'NFC'}</span>
+          </td>
+          <td style="font-weight: 500;">${a.doctor_name || 'Attending Physician'}</td>
+          <td><span style="font-weight: 600; color: #334155;">${a.department || 'General'}</span></td>
+          <td>${statusHtml}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
   async function loadTodayQueue() {
     if (!queueTableBody) return;
+
+    try {
+      const cached = localStorage.getItem('mediscan_cached_queue');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          renderQueue(parsed);
+        }
+      }
+    } catch (e) {}
+
     try {
       const response = await safeFetch('/api/appointments/today');
       if (!response.ok) {
@@ -341,39 +387,11 @@ async function initReception() {
         throw new Error(`HTTP ${response.status}`);
       }
       const appointments = await response.json();
-
-      if (queueCountEl) {
-        queueCountEl.textContent = appointments.length;
-      }
-
-      if (!appointments || appointments.length === 0) {
-        queueTableBody.innerHTML = `
-          <tr class="empty-row">
-            <td colspan="5"><i class="fas fa-inbox"></i> No appointments scheduled for today</td>
-          </tr>
-        `;
-        return;
-      }
-
-      queueTableBody.innerHTML = appointments.map(a => {
-        const isArrived = a.status === 'arrived';
-        const statusHtml = isArrived
-          ? `<span class="status-pill status-arrived"><span class="green-dot"></span> Arrived &amp; Waiting</span>`
-          : `<span class="status-pill status-scheduled"><span class="orange-dot"></span> Scheduled</span>`;
-
-        return `
-          <tr class="table-capsule-row">
-            <td><span class="arrival-time-cell"><span class="blue-dot"></span> ${a.appointment_time || 'Walk-in'}</span></td>
-            <td>
-              <div style="font-weight: 700; color: #0F172A;">${a.first_name} ${a.last_name}</div>
-              <span class="nfc-chip-pill" style="margin-top: 4px;"><i class="fas fa-wifi" style="transform: rotate(90deg); font-size: 10px;"></i> ${a.card_uid || 'NFC'}</span>
-            </td>
-            <td style="font-weight: 500;">${a.doctor_name || 'Attending Physician'}</td>
-            <td><span style="font-weight: 600; color: #334155;">${a.department || 'General'}</span></td>
-            <td>${statusHtml}</td>
-          </tr>
-        `;
-      }).join('');
+      try {
+        localStorage.setItem('mediscan_cached_queue', JSON.stringify(appointments));
+        localStorage.setItem('mediscan_queue_updated', Date.now().toString());
+      } catch (e) {}
+      renderQueue(appointments);
     } catch (err) {
       console.error('Failed to load queue:', err);
     }

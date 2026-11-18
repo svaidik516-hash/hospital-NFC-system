@@ -291,16 +291,34 @@ async function initAdmin() {
   async function loadPatients(selectedId = null) {
     if (!patientTableBody && !apptPatient) return;
     try {
+      const cached = localStorage.getItem('mediscan_cached_patients');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          allPatientsCache = parsed;
+          renderPatientList(allPatientsCache);
+          populatePatientDropdown(allPatientsCache, selectedId);
+        }
+      }
+    } catch (e) {}
+
+    try {
       const response = await safeFetch('/api/patients');
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
       allPatientsCache = await response.json();
+      try {
+        localStorage.setItem('mediscan_cached_patients', JSON.stringify(allPatientsCache));
+        localStorage.setItem('mediscan_patients_updated', Date.now().toString());
+      } catch (e) {}
       renderPatientList(allPatientsCache);
       populatePatientDropdown(allPatientsCache, selectedId);
     } catch (err) {
       console.error('Failed to load patients:', err);
-      if (patientTableBody) patientTableBody.innerHTML = `<tr><td colspan="7">Error loading patients</td></tr>`;
+      if (patientTableBody && (!allPatientsCache || allPatientsCache.length === 0)) {
+        patientTableBody.innerHTML = `<tr><td colspan="7">Error loading patients</td></tr>`;
+      }
     }
   }
 
@@ -599,67 +617,86 @@ async function initAdmin() {
   // ── Doctors Management ─────────────────────────────────────────────
   async function loadDoctors() {
     try {
+      const cached = localStorage.getItem('mediscan_cached_doctors');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          renderDoctorsUI(parsed);
+        }
+      }
+    } catch (e) {}
+
+    try {
       const response = await safeFetch('/api/doctors');
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
       const doctors = await response.json();
-
-      // Populate doctor dropdown in appointments
-      const elDoc = document.getElementById('apptDoctor') || apptDoctor;
-      if (elDoc) {
-        const prev = elDoc.value;
-        elDoc.innerHTML = '<option value="">Select Doctor…</option>' +
-          doctors.map(d => `<option value="${d.name}">${d.name} — ${d.department || ''}</option>`).join('');
-        if (prev && Array.from(elDoc.options).some(o => o.value === prev)) {
-          elDoc.value = prev;
-        }
-      }
-
-      // Populate doctor table
-      if (doctorTableBody) {
-        if (!doctors || doctors.length === 0) {
-          doctorTableBody.innerHTML = `
-            <tr class="empty-row">
-              <td colspan="4"><i class="fas fa-inbox"></i> No doctors added yet</td>
-            </tr>
-          `;
-          return;
-        }
-
-        doctorTableBody.innerHTML = doctors.map(d => `
-          <tr class="table-capsule-row">
-            <td><strong style="color: #0F172A;">${escapeHtml(d.name)}</strong></td>
-            <td><span style="font-weight: 600; color: #0084FF;">${escapeHtml(d.department || '—')}</span></td>
-            <td>${escapeHtml(d.specialization || '—')}</td>
-            <td>
-              <div style="display: flex; gap: 6px; justify-content: center;">
-                <button type="button" class="btn btn-sm btn-outline btn-edit-doctor" data-id="${d.id}" data-name="${escapeHtml(d.name)}" data-dept="${escapeHtml(d.department || '')}" data-spec="${escapeHtml(d.specialization || '')}" title="Edit Physician" style="padding: 4px 10px; font-size: 11px; border-radius: 14px;">
-                  <i class="fas fa-edit" style="color: #F59E0B;"></i> Edit
-                </button>
-                <button type="button" class="btn btn-sm btn-danger-outline btn-delete-doctor" data-id="${d.id}" data-name="${escapeHtml(d.name)}" title="Remove Physician" style="padding: 4px 8px; font-size: 11px; border-radius: 14px;">
-                  <i class="fas fa-trash-alt"></i>
-                </button>
-              </div>
-            </td>
-          </tr>
-        `).join('');
-
-        // Attach event listeners to Edit and Delete buttons
-        doctorTableBody.querySelectorAll('.btn-edit-doctor').forEach(btn => {
-          btn.addEventListener('click', () => {
-            editDoctor(btn.dataset.id, btn.dataset.name, btn.dataset.dept, btn.dataset.spec);
-          });
-        });
-
-        doctorTableBody.querySelectorAll('.btn-delete-doctor').forEach(btn => {
-          btn.addEventListener('click', () => {
-            deleteDoctor(btn.dataset.id, btn.dataset.name);
-          });
-        });
-      }
+      try {
+        localStorage.setItem('mediscan_cached_doctors', JSON.stringify(doctors));
+        localStorage.setItem('mediscan_doctors_updated', Date.now().toString());
+      } catch (e) {}
+      renderDoctorsUI(doctors);
     } catch (err) {
       console.error('Failed to load doctors:', err);
+    }
+  }
+
+  function renderDoctorsUI(doctors) {
+    // Populate doctor dropdown in appointments
+    const elDoc = document.getElementById('apptDoctor') || apptDoctor;
+    if (elDoc) {
+      const prev = elDoc.value;
+      elDoc.innerHTML = '<option value="">Select Doctor…</option>' +
+        doctors.map(d => `<option value="${d.name}">${d.name} — ${d.department || ''}</option>`).join('');
+      if (prev && Array.from(elDoc.options).some(o => o.value === prev)) {
+        elDoc.value = prev;
+      }
+    }
+
+    // Populate doctor table
+    if (doctorTableBody) {
+      if (!doctors || doctors.length === 0) {
+        doctorTableBody.innerHTML = `
+          <tr class="empty-row">
+            <td colspan="4"><i class="fas fa-inbox"></i> No doctors added yet</td>
+          </tr>
+        `;
+        return;
+      }
+
+      doctorTableBody.innerHTML = doctors.map(d => `
+        <tr class="table-capsule-row">
+          <td><strong style="color: #0F172A;">${escapeHtml(d.name)}</strong></td>
+          <td><span style="font-weight: 600; color: #0084FF;">${escapeHtml(d.department || '—')}</span></td>
+          <td>${escapeHtml(d.specialization || '—')}</td>
+          <td>
+            <div style="display: flex; gap: 6px; justify-content: center;">
+              <button type="button" class="btn btn-sm btn-outline btn-edit-doctor" data-id="${d.id}" data-name="${escapeHtml(d.name)}" data-dept="${escapeHtml(d.department || '')}" data-spec="${escapeHtml(d.specialization || '')}" title="Edit Physician" style="padding: 4px 10px; font-size: 11px; border-radius: 14px;">
+                <i class="fas fa-edit" style="color: #F59E0B;"></i> Edit
+              </button>
+              <button type="button" class="btn btn-sm btn-danger-outline btn-delete-doctor" data-id="${d.id}" data-name="${escapeHtml(d.name)}" title="Remove Physician" style="padding: 4px 8px; font-size: 11px; border-radius: 14px;">
+                <i class="fas fa-trash-alt"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+
+      // Attach event listeners to Edit and Delete buttons
+      doctorTableBody.querySelectorAll('.btn-edit-doctor').forEach(btn => {
+        btn.addEventListener('click', () => {
+          editDoctor(btn.dataset.id, btn.dataset.name, btn.dataset.dept, btn.dataset.spec);
+        });
+      });
+
+      doctorTableBody.querySelectorAll('.btn-delete-doctor').forEach(btn => {
+        btn.addEventListener('click', () => {
+          deleteDoctor(btn.dataset.id, btn.dataset.name);
+        });
+      });
+    }
+  }
     }
   }
 
@@ -796,96 +833,116 @@ async function initAdmin() {
   // ── Hospital Departments Management ────────────────────────────────
   async function loadDepartments() {
     try {
+      const cached = localStorage.getItem('mediscan_cached_departments');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          allDepartmentsCache = parsed;
+          renderDepartmentsUI(allDepartmentsCache);
+        }
+      }
+    } catch (e) {}
+
+    try {
       const response = await safeFetch('/api/departments');
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
       allDepartmentsCache = await response.json();
-
-      // 1. Populate #apptDepartment dropdown in Appointment Form
-      if (apptDepartment) {
-        const prevDept = apptDepartment.value;
-        if (!allDepartmentsCache || allDepartmentsCache.length === 0) {
-          apptDepartment.innerHTML = '<option value="">No departments configured</option>';
-        } else {
-          apptDepartment.innerHTML = allDepartmentsCache.map(d =>
-            `<option value="${escapeHtml(d.name)}">${escapeHtml(d.name)}</option>`
-          ).join('');
-          if (prevDept && Array.from(apptDepartment.options).some(o => o.value === prevDept)) {
-            apptDepartment.value = prevDept;
-          }
-        }
-      }
-
-      // 2. Populate #hospitalDeptList datalist for Doctor Department autocomplete
-      if (hospitalDeptList) {
-        hospitalDeptList.innerHTML = allDepartmentsCache.map(d =>
-          `<option value="${escapeHtml(d.name)}">`
-        ).join('');
-      }
-
-      // 3. Update count badge in Department card
-      if (deptCountBadge) {
-        deptCountBadge.textContent = `${allDepartmentsCache.length} Active Departments`;
-      }
-
-      // 4. Render #departmentTableBody
-      if (departmentTableBody) {
-        if (!allDepartmentsCache || allDepartmentsCache.length === 0) {
-          departmentTableBody.innerHTML = `
-            <tr class="empty-row">
-              <td colspan="4" style="text-align: center; padding: 24px; color: #64748B;">
-                <i class="fas fa-sitemap" style="font-size: 24px; color: #9333EA; margin-bottom: 8px; display: block;"></i>
-                <strong>No Hospital Departments Configured</strong><br>
-                <span>Add your facility's first medical department using the form above.</span>
-              </td>
-            </tr>
-          `;
-          return;
-        }
-
-        departmentTableBody.innerHTML = allDepartmentsCache.map(d => `
-          <tr class="table-capsule-row">
-            <td>
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <span style="width: 8px; height: 8px; border-radius: 50%; background: #9333EA; display: inline-block;"></span>
-                <strong style="color: #0F172A; font-size: 14px;">${escapeHtml(d.name)}</strong>
-              </div>
-            </td>
-            <td><span style="color: #475569; font-size: 13px;">${escapeHtml(d.description || '—')}</span></td>
-            <td style="text-align: center;">
-              <span class="badge ${d.doctor_count > 0 ? 'badge-light-blue' : 'badge-slate'}" style="font-size: 11px;">
-                ${d.doctor_count} ${d.doctor_count === 1 ? 'Doctor' : 'Doctors'}
-              </span>
-            </td>
-            <td>
-              <div style="display: flex; gap: 6px; justify-content: center;">
-                <button type="button" class="btn btn-sm btn-outline btn-edit-dept" data-id="${d.id}" data-name="${escapeHtml(d.name)}" data-desc="${escapeHtml(d.description || '')}" title="Edit Department" style="padding: 4px 10px; font-size: 11px; border-radius: 14px;">
-                  <i class="fas fa-edit" style="color: #F59E0B;"></i> Edit
-                </button>
-                <button type="button" class="btn btn-sm btn-danger-outline btn-delete-dept" data-id="${d.id}" data-name="${escapeHtml(d.name)}" data-count="${d.doctor_count}" title="Remove Department" style="padding: 4px 8px; font-size: 11px; border-radius: 14px;">
-                  <i class="fas fa-trash-alt"></i>
-                </button>
-              </div>
-            </td>
-          </tr>
-        `).join('');
-
-        // Attach event listeners to Edit and Delete buttons
-        departmentTableBody.querySelectorAll('.btn-edit-dept').forEach(btn => {
-          btn.addEventListener('click', () => {
-            editDepartment(btn.dataset.id, btn.dataset.name, btn.dataset.desc);
-          });
-        });
-
-        departmentTableBody.querySelectorAll('.btn-delete-dept').forEach(btn => {
-          btn.addEventListener('click', () => {
-            deleteDepartment(btn.dataset.id, btn.dataset.name, parseInt(btn.dataset.count) || 0);
-          });
-        });
-      }
+      try {
+        localStorage.setItem('mediscan_cached_departments', JSON.stringify(allDepartmentsCache));
+        localStorage.setItem('mediscan_departments_updated', Date.now().toString());
+      } catch (e) {}
+      renderDepartmentsUI(allDepartmentsCache);
     } catch (err) {
       console.error('Failed to load departments:', err);
+    }
+  }
+
+  function renderDepartmentsUI(departments) {
+    // 1. Populate #apptDepartment dropdown in Appointment Form
+    if (apptDepartment) {
+      const prevDept = apptDepartment.value;
+      if (!departments || departments.length === 0) {
+        apptDepartment.innerHTML = '<option value="">No departments configured</option>';
+      } else {
+        apptDepartment.innerHTML = departments.map(d =>
+          `<option value="${escapeHtml(d.name)}">${escapeHtml(d.name)}</option>`
+        ).join('');
+        if (prevDept && Array.from(apptDepartment.options).some(o => o.value === prevDept)) {
+          apptDepartment.value = prevDept;
+        }
+      }
+    }
+
+    // 2. Populate #hospitalDeptList datalist for Doctor Department autocomplete
+    if (hospitalDeptList) {
+      hospitalDeptList.innerHTML = departments.map(d =>
+        `<option value="${escapeHtml(d.name)}">`
+      ).join('');
+    }
+
+    // 3. Update count badge in Department card
+    if (deptCountBadge) {
+      deptCountBadge.textContent = `${departments.length} Active Departments`;
+    }
+
+    // 4. Render #departmentTableBody
+    if (departmentTableBody) {
+      if (!departments || departments.length === 0) {
+        departmentTableBody.innerHTML = `
+          <tr class="empty-row">
+            <td colspan="4" style="text-align: center; padding: 24px; color: #64748B;">
+              <i class="fas fa-sitemap" style="font-size: 24px; color: #9333EA; margin-bottom: 8px; display: block;"></i>
+              <strong>No Hospital Departments Configured</strong><br>
+              <span>Add your facility's first medical department using the form above.</span>
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      departmentTableBody.innerHTML = departments.map(d => `
+        <tr class="table-capsule-row">
+          <td>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="width: 8px; height: 8px; border-radius: 50%; background: #9333EA; display: inline-block;"></span>
+              <strong style="color: #0F172A; font-size: 14px;">${escapeHtml(d.name)}</strong>
+            </div>
+          </td>
+          <td><span style="color: #475569; font-size: 13px;">${escapeHtml(d.description || '—')}</span></td>
+          <td style="text-align: center;">
+            <span class="badge ${d.doctor_count > 0 ? 'badge-light-blue' : 'badge-slate'}" style="font-size: 11px;">
+              ${d.doctor_count} ${d.doctor_count === 1 ? 'Doctor' : 'Doctors'}
+            </span>
+          </td>
+          <td>
+            <div style="display: flex; gap: 6px; justify-content: center;">
+              <button type="button" class="btn btn-sm btn-outline btn-edit-dept" data-id="${d.id}" data-name="${escapeHtml(d.name)}" data-desc="${escapeHtml(d.description || '')}" title="Edit Department" style="padding: 4px 10px; font-size: 11px; border-radius: 14px;">
+                <i class="fas fa-edit" style="color: #F59E0B;"></i> Edit
+              </button>
+              <button type="button" class="btn btn-sm btn-danger-outline btn-delete-dept" data-id="${d.id}" data-name="${escapeHtml(d.name)}" data-count="${d.doctor_count}" title="Remove Department" style="padding: 4px 8px; font-size: 11px; border-radius: 14px;">
+                <i class="fas fa-trash-alt"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+
+      // Attach event listeners to Edit and Delete buttons
+      departmentTableBody.querySelectorAll('.btn-edit-dept').forEach(btn => {
+        btn.addEventListener('click', () => {
+          editDepartment(btn.dataset.id, btn.dataset.name, btn.dataset.desc);
+        });
+      });
+
+      departmentTableBody.querySelectorAll('.btn-delete-dept').forEach(btn => {
+        btn.addEventListener('click', () => {
+          deleteDepartment(btn.dataset.id, btn.dataset.name, parseInt(btn.dataset.count) || 0);
+        });
+      });
+    }
+  }
       if (departmentTableBody) {
         departmentTableBody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #EF4444; padding: 18px;">Failed to load departments</td></tr>`;
       }
