@@ -1,6 +1,7 @@
 /**
  * Master Verification Suite
- * Executes all automated tests for Data Persistence (R1) & Email Notifications (R2)
+ * Executes automated tests for Data Persistence (R1) & Email Notifications (R2)
+ * Supports CLI flags: --local, --live, --db-only, --email-only, --all
  */
 
 const { fork } = require('child_process');
@@ -21,13 +22,34 @@ function runScript(scriptPath) {
 }
 
 async function runAll() {
+  const args = process.argv.slice(2);
+  const isLive = args.includes('--live');
+  const isDbOnly = args.includes('--db-only') || args.includes('--persistence-only');
+  const isEmailOnly = args.includes('--email-only') || args.includes('--notifications-only');
+  const isAll = args.includes('--all');
+
   console.log('====================================================');
   console.log('🚀 RUNNING MASTER VERIFICATION SUITE');
+  console.log(`   Flags: ${args.length > 0 ? args.join(' ') : '--local (default)'}`);
   console.log('====================================================');
 
   const startTime = Date.now();
-  await runScript(path.join(__dirname, 'verify-persistence.js'));
-  await runScript(path.join(__dirname, 'verify-notifications.js'));
+
+  if (isLive) {
+    await runScript(path.join(__dirname, 'verify-live-deployment.js'));
+  } else if (isDbOnly) {
+    await runScript(path.join(__dirname, 'verify-persistence.js'));
+  } else if (isEmailOnly) {
+    await runScript(path.join(__dirname, 'verify-notifications.js'));
+  } else if (isAll) {
+    await runScript(path.join(__dirname, 'verify-persistence.js'));
+    await runScript(path.join(__dirname, 'verify-notifications.js'));
+    await runScript(path.join(__dirname, 'verify-live-deployment.js'));
+  } else {
+    // Default / --local mode
+    await runScript(path.join(__dirname, 'verify-persistence.js'));
+    await runScript(path.join(__dirname, 'verify-notifications.js'));
+  }
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
   console.log('====================================================');

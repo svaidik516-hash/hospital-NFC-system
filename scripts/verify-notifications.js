@@ -133,7 +133,9 @@ async function testNotifications() {
   console.log('====================================================\n');
 }
 
-testNotifications().catch(err => {
-  console.error('\n❌ Notification Verification Failed:', err);
-  process.exit(1);
-});
+testNotifications()
+  .then(() => process.exit(0))
+  .catch(err => {
+    console.error('\n❌ Notification Verification Failed:', err);
+    process.exit(1);
+  });

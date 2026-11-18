@@ -4,11 +4,14 @@
   "description": "Authentication module with JWT and bcrypt",
   "main": "auth.js",
   "scripts": {
+    "start": "node server.js",
     "test": "node test-auth.js",
     "verify": "node scripts/verify-all.js",
     "verify:persistence": "node scripts/verify-persistence.js",
+    "verify:email": "node scripts/verify-notifications.js",
     "verify:notifications": "node scripts/verify-notifications.js",
-    "verify:all": "node scripts/verify-all.js"
+    "verify:live": "node scripts/verify-all.js --live",
+    "verify:all": "node scripts/verify-all.js --all"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",

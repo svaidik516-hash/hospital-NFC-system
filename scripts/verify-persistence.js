@@ -118,7 +118,9 @@ async function testPersistence() {
   console.log('====================================================\n');
 }
 
-testPersistence().catch(err => {
-  console.error('\n❌ Persistence Verification Failed:', err);
-  process.exit(1);
-});
+testPersistence()
+  .then(() => process.exit(0))
+  .catch(err => {
+    console.error('\n❌ Persistence Verification Failed:', err);
+    process.exit(1);
+  });
