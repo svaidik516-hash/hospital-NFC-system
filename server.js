@@ -271,10 +271,10 @@ const requireDoctorOrReception = auth.requireRole([auth.ROLES.ADMIN, auth.ROLES.
 // ─── PATIENT ROUTES ───────────────────────────────────────────────────────────────
 
 // GET /api/patients - list all (Admin: decrypted, Doctor: decrypted, Reception: encrypted)
-app.get('/api/patients', requireDoctorOrReception, auditMiddleware('PATIENTS_LIST', (req) => ({ canDecrypt: getDecryptPermission(req) })), (req, res) => {
+app.get('/api/patients', requireDoctorOrReception, auditMiddleware('PATIENTS_LIST', (req) => ({ canDecrypt: getDecryptPermission(req) })), async (req, res) => {
   try {
     const canDecrypt = getDecryptPermission(req);
-    const patients = db.getAllPatients(canDecrypt);
+    const patients = await db.getAllPatients(canDecrypt);
     res.json(patients);
   } catch (err) {
     console.error('GET /api/patients error:', err.message);
@@ -298,10 +298,10 @@ app.get('/api/patients/search', requireDoctorOrReception, auditMiddleware('PATIE
 });
 
 // GET /api/patients/card/:uid - full record by NFC card UID (decrypted for admin/doctor)
-app.get('/api/patients/card/:uid', requireDoctorOrReception, auditMiddleware('PATIENT_RECORD_ACCESS', (req) => ({ cardUid: req.params.uid, canDecrypt: getDecryptPermission(req) })), (req, res) => {
+app.get('/api/patients/card/:uid', requireDoctorOrReception, auditMiddleware('PATIENT_RECORD_ACCESS', (req) => ({ cardUid: req.params.uid, canDecrypt: getDecryptPermission(req) })), async (req, res) => {
   try {
     const canDecrypt = getDecryptPermission(req);
-    const record = db.getFullPatientRecord(req.params.uid, canDecrypt);
+    const record = await db.getFullPatientRecord(req.params.uid, canDecrypt);
     if (!record) {
       return res.status(404).json({ error: 'Patient not found with that card UID' });
     }
@@ -470,9 +470,9 @@ app.post('/api/appointments', requireReception, auditMiddleware('APPOINTMENT_CRE
 });
 
 // GET /api/appointments/today - today's appointments (reception, doctor, admin)
-app.get('/api/appointments/today', requireDoctorOrReception, auditMiddleware('APPOINTMENTS_TODAY'), (req, res) => {
+app.get('/api/appointments/today', requireDoctorOrReception, auditMiddleware('APPOINTMENTS_TODAY'), async (req, res) => {
   try {
-    const appointments = db.getTodayAppointments();
+    const appointments = await db.getTodayAppointments();
     res.json(appointments);
   } catch (err) {
     console.error('GET /api/appointments/today error:', err.message);
@@ -481,9 +481,9 @@ app.get('/api/appointments/today', requireDoctorOrReception, auditMiddleware('AP
 });
 
 // GET /api/appointments/date/:date - appointments by date (reception, doctor, admin)
-app.get('/api/appointments/date/:date', requireDoctorOrReception, auditMiddleware('APPOINTMENTS_BY_DATE'), (req, res) => {
+app.get('/api/appointments/date/:date', requireDoctorOrReception, auditMiddleware('APPOINTMENTS_BY_DATE'), async (req, res) => {
   try {
-    const appointments = db.getAppointmentsByDate(req.params.date);
+    const appointments = await db.getAppointmentsByDate(req.params.date);
     res.json(appointments);
   } catch (err) {
     console.error('GET /api/appointments/date/:date error:', err.message);
@@ -509,7 +509,7 @@ app.put('/api/appointments/:id', requireReception, auditMiddleware('APPOINTMENT_
 // ─── CHECK-IN ROUTE (Reception) ───────────────────────────────────────────────────
 
 // POST /api/checkin - NFC check-in: find patient by card UID, mark arrival, create visit
-app.post('/api/checkin', requireReception, auditMiddleware('PATIENT_CHECKIN', (req, res) => ({ patientId: res.locals?.patientId, cardUid: req.body.card_uid, isWalkIn: res.locals?.isWalkIn })), (req, res) => {
+app.post('/api/checkin', requireReception, auditMiddleware('PATIENT_CHECKIN', (req, res) => ({ patientId: res.locals?.patientId, cardUid: req.body.card_uid, isWalkIn: res.locals?.isWalkIn })), async (req, res) => {
   try {
     const { card_uid } = req.body;
     if (!card_uid) {
@@ -517,7 +517,7 @@ app.post('/api/checkin', requireReception, auditMiddleware('PATIENT_CHECKIN', (r
     }
 
     const canDecrypt = getDecryptPermission(req);
-    const patient = db.getPatientByCardUID(card_uid, canDecrypt);
+    const patient = await db.getPatientByCardUID(card_uid, canDecrypt);
     if (!patient) {
       return res.status(404).json({ error: 'Patient not found with that NFC card' });
     }
@@ -590,9 +590,9 @@ app.get('/api/lab-reports/patient/:patientId', requireDoctorOrReception, auditMi
 // ─── DOCTOR ROUTES ────────────────────────────────────────────────────────────────
 
 // GET /api/doctors - list all doctors (all authenticated)
-app.get('/api/doctors', auth.requireAuth(), (req, res) => {
+app.get('/api/doctors', auth.requireAuth(), async (req, res) => {
   try {
-    const doctors = db.getDoctors();
+    const doctors = await db.getDoctors();
     res.json(doctors);
   } catch (err) {
     console.error('GET /api/doctors error:', err.message);
@@ -617,9 +617,9 @@ app.post('/api/doctors', requireAdmin, auditMiddleware('DOCTOR_CREATED', (req, r
 });
 
 // GET /api/doctors/:id - get single doctor
-app.get('/api/doctors/:id', auth.requireAuth(), (req, res) => {
+app.get('/api/doctors/:id', auth.requireAuth(), async (req, res) => {
   try {
-    const doctor = db.getDoctorById(req.params.id);
+    const doctor = await db.getDoctorById(req.params.id);
     if (!doctor) {
       return res.status(404).json({ error: 'Doctor not found' });
     }
@@ -637,7 +637,7 @@ app.put('/api/doctors/:id', requireAdmin, auditMiddleware('DOCTOR_UPDATED', (req
     if (data.name !== undefined && !data.name.trim()) {
       return res.status(400).json({ error: 'Doctor name cannot be empty' });
     }
-    const existing = db.getDoctorById(req.params.id);
+    const existing = await db.getDoctorById(req.params.id);
     if (!existing) {
       return res.status(404).json({ error: 'Doctor not found' });
     }
@@ -652,7 +652,7 @@ app.put('/api/doctors/:id', requireAdmin, auditMiddleware('DOCTOR_UPDATED', (req
 // DELETE /api/doctors/:id - delete doctor (admin only)
 app.delete('/api/doctors/:id', requireAdmin, auditMiddleware('DOCTOR_DELETED', (req, res) => ({ doctorId: req.params.id })), async (req, res) => {
   try {
-    const existing = db.getDoctorById(req.params.id);
+    const existing = await db.getDoctorById(req.params.id);
     if (!existing) {
       return res.status(404).json({ error: 'Doctor not found' });
     }
@@ -690,9 +690,9 @@ app.get('/api/health', async (req, res) => {
 // ─── DEPARTMENT ROUTES ────────────────────────────────────────────────────────────
 
 // GET /api/departments - list all hospital departments
-app.get('/api/departments', auth.requireAuth(), (req, res) => {
+app.get('/api/departments', auth.requireAuth(), async (req, res) => {
   try {
-    const departments = db.getDepartments();
+    const departments = await db.getDepartments();
     res.json(departments);
   } catch (err) {
     console.error('GET /api/departments error:', err.message);
@@ -804,7 +804,7 @@ app.post('/api/doctor/followup-and-notify', requireDoctor, auditMiddleware('NOTI
 
     // Retrieve patient record - doctor can decrypt
     const canDecrypt = getDecryptPermission(req);
-    const patients = db.getAllPatients(canDecrypt);
+    const patients = await db.getAllPatients(canDecrypt);
     const patient = patients.find(p => p.id === parseInt(patient_id));
     if (!patient) {
       return res.status(404).json({ error: 'Patient not found' });
@@ -963,7 +963,7 @@ app.get('/api/visits/:visitId/pdf', requireDoctor, auditMiddleware('PDF_DOWNLOAD
   try {
     const visitId = parseInt(req.params.visitId);
     const canDecrypt = getDecryptPermission(req);
-    const patients = db.getAllPatients(canDecrypt);
+    const patients = await db.getAllPatients(canDecrypt);
     let targetVisit = null;
     let targetPatient = null;
 
@@ -982,7 +982,7 @@ app.get('/api/visits/:visitId/pdf', requireDoctor, auditMiddleware('PDF_DOWNLOAD
     }
 
     const prescriptions = db.getPrescriptionsByVisit(visitId, canDecrypt);
-    const pRecord = db.getPatientByCardUID(targetPatient.card_uid, canDecrypt);
+    const pRecord = await db.getPatientByCardUID(targetPatient.card_uid, canDecrypt);
     const appointment = (pRecord && pRecord.appointments && pRecord.appointments.length > 0) ? pRecord.appointments[0] : null;
 
     const notifications = require('./notifications');
@@ -1022,11 +1022,11 @@ app.get('/api/dashboard/stats', auth.requireAuth(), auditMiddleware('DASHBOARD_S
 // ─── ADMIN ENDPOINTS ──────────────────────────────────────────────────────────────
 
 // GET /api/admin/stats - admin stats
-app.get('/api/admin/stats', requireAdmin, auditMiddleware('ADMIN_STATS'), (req, res) => {
+app.get('/api/admin/stats', requireAdmin, auditMiddleware('ADMIN_STATS'), async (req, res) => {
   try {
     const stats = db.getDashboardStats();
-    const totalPatients = db.getAllPatients(true).length;
-    const totalDoctors = db.getDoctors().length;
+    const totalPatients = (await db.getAllPatients(true)).length;
+    const totalDoctors = (await db.getDoctors()).length;
     res.json({ ...stats, totalPatients, totalDoctors });
   } catch (err) {
     console.error('GET /api/admin/stats error:', err.message);

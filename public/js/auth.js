@@ -10,42 +10,57 @@
 const AuthStorage = (() => {
     const MEMORY_KEYS = ['accessToken', 'refreshToken', 'user'];
     let memoryStore = {};
-    let useLocalStorage = false;
+    let useLocalStorage = true;
 
     const STORAGE_PREFIX = 'auth_';
 
-    function init(rememberMe = false) {
+    function init(rememberMe = true) {
         useLocalStorage = rememberMe;
-        if (useLocalStorage) {
-            MEMORY_KEYS.forEach(key => {
+        // Always attempt to restore persisted tokens from localStorage first
+        MEMORY_KEYS.forEach(key => {
+            try {
                 const stored = localStorage.getItem(STORAGE_PREFIX + key);
-                if (stored !== null) {
+                if (stored !== null && stored !== 'undefined') {
                     try {
                         memoryStore[key] = JSON.parse(stored);
                     } catch {
                         memoryStore[key] = stored;
                     }
                 }
-            });
-        }
+            } catch (e) {}
+        });
     }
 
     function set(key, value) {
         memoryStore[key] = value;
-        if (useLocalStorage) {
+        try {
             localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value));
-        }
+        } catch (e) {}
     }
 
     function get(key) {
-        return memoryStore[key];
+        if (memoryStore[key] !== undefined) {
+            return memoryStore[key];
+        }
+        try {
+            const stored = localStorage.getItem(STORAGE_PREFIX + key);
+            if (stored !== null && stored !== 'undefined') {
+                try {
+                    memoryStore[key] = JSON.parse(stored);
+                } catch {
+                    memoryStore[key] = stored;
+                }
+                return memoryStore[key];
+            }
+        } catch (e) {}
+        return undefined;
     }
 
     function remove(key) {
         delete memoryStore[key];
-        if (useLocalStorage) {
+        try {
             localStorage.removeItem(STORAGE_PREFIX + key);
-        }
+        } catch (e) {}
     }
 
     function clear() {
@@ -53,21 +68,7 @@ const AuthStorage = (() => {
     }
 
     function setRememberMe(remember) {
-        const wasLocal = useLocalStorage;
         useLocalStorage = remember;
-        if (remember && !wasLocal) {
-            // Migrate from memory to localStorage
-            MEMORY_KEYS.forEach(key => {
-                if (memoryStore[key] !== undefined) {
-                    localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(memoryStore[key]));
-                }
-            });
-        } else if (!remember && wasLocal) {
-            // Migrate from localStorage to memory (keep in memory, clear localStorage)
-            MEMORY_KEYS.forEach(key => {
-                localStorage.removeItem(STORAGE_PREFIX + key);
-            });
-        }
     }
 
     function isUsingLocalStorage() {
@@ -387,7 +388,7 @@ async function authenticatedFetch(url, options = {}) {
 // INITIALIZATION
 // ============================================
 
-async function initAuth(rememberMe = false) {
+async function initAuth(rememberMe = true) {
     if (authState.isInitialized) return getAuthState();
 
     AuthStorage.init(rememberMe);
@@ -397,6 +398,8 @@ async function initAuth(rememberMe = false) {
     const user = AuthStorage.get('user');
 
     if (accessToken && refreshToken && user) {
+        authState.user = user;
+        authState.isAuthenticated = true;
         if (isTokenExpired(accessToken)) {
             // Try to refresh
             try {
@@ -419,7 +422,7 @@ async function initAuth(rememberMe = false) {
 
 function checkAuthOnLoad() {
     // Called on page load to verify auth state
-    return initAuth(AuthStorage.isUsingLocalStorage());
+    return initAuth(true);
 }
 
 

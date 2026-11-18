@@ -5,6 +5,7 @@
  * Call `initDB()` once at startup; after that every exported function is synchronous.
  */
 
+require('dotenv').config();
 const initSqlJs = require('sql.js');
 let wasmBinary = null;
 try {
@@ -317,7 +318,29 @@ async function initDB() {
       console.log('[Database] Synchronizing persistent state from Supabase...');
       db.run('PRAGMA foreign_keys = OFF');
       // 1. Departments
-      const deptsRes = await pool.query('SELECT * FROM departments ORDER BY id ASC');
+      let deptsRes = await pool.query('SELECT * FROM departments ORDER BY id ASC');
+      if (deptsRes && deptsRes.rows.length === 0) {
+        const defaultDepts = [
+          { name: 'General Medicine', description: 'Primary adult care, internal medicine and wellness checks' },
+          { name: 'Cardiology', description: 'Heart, cardiovascular diagnostics and intervention' },
+          { name: 'Orthopedics', description: 'Bones, joints, spine and musculoskeletal trauma' },
+          { name: 'Neurology', description: 'Brain, spinal cord, nerves and neurological disorders' },
+          { name: 'Pediatrics', description: 'Infant, child and adolescent health and immunization' },
+          { name: 'Dermatology', description: 'Skin, hair, nails and cosmetic dermatology' },
+          { name: 'ENT', description: 'Ear, nose, throat and head & neck clinical care' },
+          { name: 'Ophthalmology', description: 'Comprehensive eye care, vision and corrective surgery' },
+          { name: 'Emergency & Trauma', description: '24/7 urgent resuscitation and acute critical intervention' },
+          { name: 'Obstetrics & Gynecology', description: 'Maternity, prenatal delivery and women health services' },
+          { name: 'Radiology & Imaging', description: 'Diagnostic X-Ray, CT scans, Ultrasound and MRI' },
+          { name: 'General Surgery', description: 'Elective and emergency surgical procedures' }
+        ];
+        for (const d of defaultDepts) {
+          try {
+            await pool.query('INSERT INTO departments (name, description) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING', [d.name, d.description]);
+          } catch (e) {}
+        }
+        deptsRes = await pool.query('SELECT * FROM departments ORDER BY id ASC');
+      }
       if (deptsRes) {
         db.run('DELETE FROM departments');
         for (const r of deptsRes.rows) {
@@ -503,9 +526,44 @@ function nowDatetime() {
 //  PATIENT OPERATIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function getPatientByCardUID(uid, canDecrypt = false) {
+async function getPatientByCardUID(uid, canDecrypt = false) {
   if (!uid) return null;
   const cleanUid = String(uid).trim();
+
+  const pool = getPgPool();
+  if (pool) {
+    try {
+      const pRes = await pool.query('SELECT * FROM patients WHERE LOWER(card_uid) = LOWER($1) LIMIT 1', [cleanUid]);
+      if (pRes && pRes.rows.length > 0) {
+        const r = pRes.rows[0];
+        db.run(`INSERT OR REPLACE INTO patients (id, card_uid, first_name, last_name, date_of_birth, age, gender,
+          blood_group, contact_phone, contact_email, emergency_contact_name, emergency_contact_phone,
+          emergency_contact_relation, address, allergies, chronic_conditions, insurance_id, registered_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [r.id, r.card_uid, r.first_name, r.last_name, r.date_of_birth, r.age, r.gender,
+           r.blood_group, r.contact_phone, r.contact_email, r.emergency_contact_name, r.emergency_contact_phone,
+           r.emergency_contact_relation, r.address, r.allergies, r.chronic_conditions, r.insurance_id,
+           r.registered_at ? new Date(r.registered_at).toISOString() : null,
+           r.updated_at ? new Date(r.updated_at).toISOString() : null]);
+
+        const decryptedPatient = maybeDecryptPatient(r, canDecrypt);
+        const [vRes, rxRes, apRes, lrRes] = await Promise.all([
+          pool.query('SELECT * FROM visits WHERE patient_id = $1 ORDER BY visit_date DESC', [r.id]),
+          pool.query('SELECT * FROM prescriptions WHERE patient_id = $1 ORDER BY prescribed_at DESC', [r.id]),
+          pool.query('SELECT * FROM appointments WHERE patient_id = $1 ORDER BY appointment_date DESC', [r.id]),
+          pool.query('SELECT * FROM lab_reports WHERE patient_id = $1 ORDER BY created_at DESC', [r.id])
+        ]);
+        decryptedPatient.visits = vRes.rows.map(v => maybeDecryptVisit(v, canDecrypt));
+        decryptedPatient.prescriptions = rxRes.rows.map(p => maybeDecryptPrescription(p, canDecrypt));
+        decryptedPatient.appointments = apRes.rows;
+        decryptedPatient.lab_reports = lrRes.rows.map(lr => maybeDecryptLabReport(lr, canDecrypt));
+        return decryptedPatient;
+      }
+    } catch (e) {
+      console.warn('[Database] getPatientByCardUID cloud sync warning:', e.message);
+    }
+  }
+
   const patient = get('SELECT * FROM patients WHERE LOWER(card_uid) = LOWER(?)', [cleanUid]);
   if (!patient) return null;
 
@@ -642,7 +700,32 @@ async function updatePatient(id, data) {
   return updated;
 }
 
-function getAllPatients(canDecrypt = false) {
+async function getAllPatients(canDecrypt = false) {
+  const pool = getPgPool();
+  if (pool) {
+    try {
+      const res = await pool.query('SELECT * FROM patients ORDER BY registered_at DESC, id DESC');
+      if (res && res.rows) {
+        db.run('PRAGMA foreign_keys = OFF');
+        db.run('DELETE FROM patients');
+        for (const r of res.rows) {
+          db.run(`INSERT INTO patients (id, card_uid, first_name, last_name, date_of_birth, age, gender,
+            blood_group, contact_phone, contact_email, emergency_contact_name, emergency_contact_phone,
+            emergency_contact_relation, address, allergies, chronic_conditions, insurance_id, registered_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [r.id, r.card_uid, r.first_name, r.last_name, r.date_of_birth, r.age, r.gender,
+             r.blood_group, r.contact_phone, r.contact_email, r.emergency_contact_name, r.emergency_contact_phone,
+             r.emergency_contact_relation, r.address, r.allergies, r.chronic_conditions, r.insurance_id,
+             r.registered_at ? new Date(r.registered_at).toISOString() : null,
+             r.updated_at ? new Date(r.updated_at).toISOString() : null]);
+        }
+        db.run('PRAGMA foreign_keys = ON');
+        return res.rows.map(p => maybeDecryptPatient(p, canDecrypt));
+      }
+    } catch (e) {
+      console.warn('[Database] getAllPatients cloud sync warning:', e.message);
+    }
+  }
   return all('SELECT * FROM patients ORDER BY registered_at DESC')
     .map(p => maybeDecryptPatient(p, canDecrypt));
 }
@@ -657,11 +740,22 @@ function searchPatients(query) {
 }
 
 async function deletePatient(id) {
+  // Delete child records in both SQLite and Supabase to respect FK constraints
   run('DELETE FROM notifications WHERE patient_id = ?', [id]);
+  await pgQuery('DELETE FROM notifications WHERE patient_id = $1', [id]);
+
   run('DELETE FROM lab_reports WHERE patient_id = ?', [id]);
+  await pgQuery('DELETE FROM lab_reports WHERE patient_id = $1', [id]);
+
   run('DELETE FROM prescriptions WHERE patient_id = ?', [id]);
+  await pgQuery('DELETE FROM prescriptions WHERE patient_id = $1', [id]);
+
   run('DELETE FROM visits WHERE patient_id = ?', [id]);
+  await pgQuery('DELETE FROM visits WHERE patient_id = $1', [id]);
+
   run('DELETE FROM appointments WHERE patient_id = ?', [id]);
+  await pgQuery('DELETE FROM appointments WHERE patient_id = $1', [id]);
+
   const res = run('DELETE FROM patients WHERE id = ?', [id]);
   await pgQuery('DELETE FROM patients WHERE id = $1', [id]);
   return res.changes > 0;
@@ -826,7 +920,24 @@ function createAppointment(data) {
   return appt;
 }
 
-function getAppointmentsByDate(date) {
+async function getAppointmentsByDate(date) {
+  const pool = getPgPool();
+  if (pool) {
+    try {
+      const res = await pool.query(`
+        SELECT a.*, p.first_name, p.last_name, p.card_uid, p.contact_phone
+        FROM appointments a
+        JOIN patients p ON a.patient_id = p.id
+        WHERE a.appointment_date = $1
+        ORDER BY a.appointment_time ASC
+      `, [date]);
+      if (res && res.rows) {
+        return res.rows;
+      }
+    } catch (e) {
+      console.warn('[Database] getAppointmentsByDate cloud sync warning:', e.message);
+    }
+  }
   return all(`
     SELECT a.*, p.first_name, p.last_name, p.card_uid, p.contact_phone
     FROM appointments a
@@ -836,8 +947,8 @@ function getAppointmentsByDate(date) {
   `, [date]);
 }
 
-function getTodayAppointments() {
-  return getAppointmentsByDate(todayDate());
+async function getTodayAppointments() {
+  return await getAppointmentsByDate(todayDate());
 }
 
 function getTodayArrivals() {
@@ -983,12 +1094,43 @@ function getLabReportsByPatient(patientId, canDecrypt = false) {
 //  DOCTOR OPERATIONS
 // ══════════════════════════════════════════════════════════════════════════════
 
-function getDoctors() {
+async function getDoctors() {
+  const pool = getPgPool();
+  if (pool) {
+    try {
+      const res = await pool.query('SELECT * FROM doctors ORDER BY name ASC');
+      if (res && res.rows) {
+        db.run('DELETE FROM doctors');
+        for (const r of res.rows) {
+          db.run('INSERT INTO doctors (id, name, department, specialization, contact, status) VALUES (?, ?, ?, ?, ?, ?)',
+            [r.id, r.name, r.department, r.specialization, r.contact, r.status]);
+        }
+        return res.rows;
+      }
+    } catch (e) {
+      console.warn('[Database] getDoctors cloud sync warning:', e.message);
+    }
+  }
   return all('SELECT * FROM doctors ORDER BY name');
 }
 
-function getDoctorById(id) {
-  return get('SELECT * FROM doctors WHERE id = ?', [id]);
+async function getDoctorById(id) {
+  const numId = parseInt(id, 10) || id;
+  const pool = getPgPool();
+  if (pool) {
+    try {
+      const res = await pool.query('SELECT * FROM doctors WHERE id = $1 LIMIT 1', [numId]);
+      if (res && res.rows.length > 0) {
+        const r = res.rows[0];
+        db.run('INSERT OR REPLACE INTO doctors (id, name, department, specialization, contact, status) VALUES (?, ?, ?, ?, ?, ?)',
+          [r.id, r.name, r.department, r.specialization, r.contact, r.status]);
+        return r;
+      }
+    } catch (e) {
+      console.warn('[Database] getDoctorById cloud sync warning:', e.message);
+    }
+  }
+  return get('SELECT * FROM doctors WHERE id = ?', [numId]);
 }
 
 async function createDoctor(data) {
@@ -1055,7 +1197,24 @@ async function deleteDoctor(id) {
 //  DEPARTMENT OPERATIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function getDepartments() {
+async function getDepartments() {
+  const pool = getPgPool();
+  if (pool) {
+    try {
+      const res = await pool.query('SELECT * FROM departments ORDER BY name ASC');
+      if (res && res.rows && res.rows.length > 0) {
+        return res.rows.map(d => {
+          const docCount = get('SELECT COUNT(*) AS count FROM doctors WHERE department = ?', [d.name]);
+          return {
+            ...d,
+            doctor_count: docCount ? docCount.count : 0
+          };
+        });
+      }
+    } catch (e) {
+      console.warn('[Database] getDepartments cloud sync warning:', e.message);
+    }
+  }
   const depts = all('SELECT * FROM departments ORDER BY name ASC');
   return depts.map(d => {
     const docCount = get('SELECT COUNT(*) AS count FROM doctors WHERE department = ?', [d.name]);
@@ -1143,11 +1302,11 @@ function getDashboardStats() {
 //  FULL PATIENT RECORD
 // ══════════════════════════════════════════════════════════════════════════════
 
-function getFullPatientRecord(cardUID, canDecrypt = false) {
-  const patient = get('SELECT * FROM patients WHERE card_uid = ?', [cardUID]);
+async function getFullPatientRecord(cardUID, canDecrypt = false) {
+  const patient = await getPatientByCardUID(cardUID, canDecrypt);
   if (!patient) return null;
 
-  const decryptedPatient = maybeDecryptPatient(patient, canDecrypt);
+  const decryptedPatient = patient;
 
   const visits = all('SELECT * FROM visits WHERE patient_id = ? ORDER BY visit_date DESC', [decryptedPatient.id])
     .map(v => {

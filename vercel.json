@@ -8,7 +8,9 @@
         "includeFiles": [
           "public/**",
           "sql-wasm-binary.js",
-          "data/**"
+          "data/**",
+          "node_modules/pdfkit/**",
+          "node_modules/pdfkit/js/data/**"
         ]
       }
     }

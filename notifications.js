@@ -13,24 +13,43 @@ const PDFDocument = require('pdfkit');
 // Defaults to Gmail if GMAIL_USER & GMAIL_APP_PASSWORD are provided,
 // or custom SMTP, or local direct simulation transporter.
 let transporter = null;
+let currentTransporterType = null;
+
+function resetTransporter() {
+  transporter = null;
+  currentTransporterType = null;
+}
 
 async function getTransporter() {
+  const hasGmail = !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD);
+  const hasSmtp = !!(process.env.SMTP_HOST && process.env.SMTP_USER);
+
+  // If transporter was initialized as jsonTransport simulation but real credentials are now present, re-init
+  if (transporter && currentTransporterType === 'preview' && (hasGmail || hasSmtp)) {
+    transporter = null;
+  }
+
   if (transporter) return transporter;
 
   // 1. Gmail service (recommended for ease of setup)
-  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
-    const cleanPass = process.env.GMAIL_APP_PASSWORD.replace(/\s+/g, '');
+  if (hasGmail) {
+    const cleanPass = (process.env.GMAIL_APP_PASSWORD || '').replace(/["'\s\r\n]/g, '');
+    const cleanUser = (process.env.GMAIL_USER || '').trim().toLowerCase();
     transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: process.env.GMAIL_USER.trim(),
+        user: cleanUser,
         pass: cleanPass,
       },
+      connectionTimeout: 8000,
+      greetingTimeout: 5000,
+      socketTimeout: 10000,
     });
-    console.log(`[Notification Service] Configured Gmail transporter for: ${process.env.GMAIL_USER}`);
+    currentTransporterType = 'gmail';
+    console.log(`[Notification Service] Configured Gmail transporter for: ${cleanUser}`);
   }
   // 2. Custom SMTP provider (SendGrid, Mailgun, AWS SES, etc.)
-  else if (process.env.SMTP_HOST && process.env.SMTP_USER) {
+  else if (hasSmtp) {
     transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: parseInt(process.env.SMTP_PORT || '587'),
@@ -39,7 +58,11 @@ async function getTransporter() {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
+      connectionTimeout: 8000,
+      greetingTimeout: 5000,
+      socketTimeout: 10000,
     });
+    currentTransporterType = 'smtp';
     console.log(`[Notification Service] Configured SMTP transporter for: ${process.env.SMTP_HOST}`);
   }
   // 3. Simulated direct JSON transport (for local testing & preview without credentials)
@@ -47,6 +70,7 @@ async function getTransporter() {
     transporter = nodemailer.createTransport({
       jsonTransport: true,
     });
+    currentTransporterType = 'preview';
     console.log('[Notification Service] Using local preview transporter (configure .env for live email delivery)');
   }
   return transporter;
@@ -436,7 +460,7 @@ function generateMedicalSummaryPDF({ patient, doctorName, department, visit, pre
 // ── Main Dispatch Functions ───────────────────────────────────────────────────
 
 async function sendPatientEmail({ patient, doctorName, department, visit, prescriptions, appointment, targetEmail }) {
-  const toEmail = targetEmail || patient.contact_email;
+  const toEmail = (targetEmail || patient.contact_email || '').trim();
   if (!toEmail) {
     throw new Error('No email address available for patient');
   }
@@ -512,6 +536,8 @@ async function sendPatientWhatsApp({ patient, doctorName, department, visit, pre
 }
 
 module.exports = {
+  getTransporter,
+  resetTransporter,
   sendPatientEmail,
   sendPatientWhatsApp,
   generateEmailHTML,
