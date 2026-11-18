@@ -18,16 +18,33 @@ const { Pool } = require('pg');
 
 let pgPool = null;
 
+function formatSupabaseUrl(url) {
+  if (!url) return url;
+  let formatted = String(url).trim();
+  if ((formatted.startsWith('"') && formatted.endsWith('"')) || (formatted.startsWith("'") && formatted.endsWith("'"))) {
+    formatted = formatted.slice(1, -1).trim();
+  }
+  // Direct Supabase connections (db.<ref>.supabase.co:5432) are IPv6-only and fail on Vercel AWS Lambda.
+  // Automatically rewrite to the IPv4-compatible connection pooler:
+  if (formatted.includes('db.buhcundujbwmikttksji.supabase.co')) {
+    formatted = formatted
+      .replace(/@db\.[a-z0-9]+\.supabase\.co(?::5432)?/, '@aws-1-ap-northeast-2.pooler.supabase.com:6543')
+      .replace('postgres:', 'postgres.buhcundujbwmikttksji:');
+  }
+  return formatted;
+}
+
 function getPgPool() {
   if (pgPool) return pgPool;
-  const databaseUrl = process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL;
+  const rawUrl = process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL;
+  const databaseUrl = formatSupabaseUrl(rawUrl);
   if (databaseUrl) {
     try {
       pgPool = new Pool({
         connectionString: databaseUrl,
         ssl: { rejectUnauthorized: false },
-        max: 5,
-        idleTimeoutMillis: 30000,
+        max: process.env.VERCEL ? 2 : 5,
+        idleTimeoutMillis: 10000,
         connectionTimeoutMillis: 10000
       });
       pgPool.on('error', (err) => {
@@ -298,9 +315,10 @@ async function initDB() {
   if (pool) {
     try {
       console.log('[Database] Synchronizing persistent state from Supabase...');
+      db.run('PRAGMA foreign_keys = OFF');
       // 1. Departments
       const deptsRes = await pool.query('SELECT * FROM departments ORDER BY id ASC');
-      if (deptsRes && deptsRes.rows.length > 0) {
+      if (deptsRes) {
         db.run('DELETE FROM departments');
         for (const r of deptsRes.rows) {
           db.run('INSERT INTO departments (id, name, description, created_at) VALUES (?, ?, ?, ?)',
@@ -310,7 +328,7 @@ async function initDB() {
 
       // 2. Doctors
       const docsRes = await pool.query('SELECT * FROM doctors ORDER BY id ASC');
-      if (docsRes && docsRes.rows.length > 0) {
+      if (docsRes) {
         db.run('DELETE FROM doctors');
         for (const r of docsRes.rows) {
           db.run('INSERT INTO doctors (id, name, department, specialization, contact, status) VALUES (?, ?, ?, ?, ?, ?)',
@@ -320,7 +338,7 @@ async function initDB() {
 
       // 3. Patients
       const patRes = await pool.query('SELECT * FROM patients ORDER BY id ASC');
-      if (patRes && patRes.rows.length > 0) {
+      if (patRes) {
         db.run('DELETE FROM patients');
         for (const r of patRes.rows) {
           db.run(`INSERT INTO patients (id, card_uid, first_name, last_name, date_of_birth, age, gender,
@@ -337,7 +355,7 @@ async function initDB() {
 
       // 4. Visits
       const visitRes = await pool.query('SELECT * FROM visits ORDER BY id ASC');
-      if (visitRes && visitRes.rows.length > 0) {
+      if (visitRes) {
         db.run('DELETE FROM visits');
         for (const r of visitRes.rows) {
           db.run(`INSERT INTO visits (id, patient_id, visit_date, check_in_time, check_out_time, department,
@@ -351,7 +369,7 @@ async function initDB() {
 
       // 5. Prescriptions
       const prescRes = await pool.query('SELECT * FROM prescriptions ORDER BY id ASC');
-      if (prescRes && prescRes.rows.length > 0) {
+      if (prescRes) {
         db.run('DELETE FROM prescriptions');
         for (const r of prescRes.rows) {
           db.run(`INSERT INTO prescriptions (id, visit_id, patient_id, medicine_name, dosage, frequency, duration, instructions, prescribed_by, prescribed_at)
@@ -363,7 +381,7 @@ async function initDB() {
 
       // 6. Appointments
       const apptRes = await pool.query('SELECT * FROM appointments ORDER BY id ASC');
-      if (apptRes && apptRes.rows.length > 0) {
+      if (apptRes) {
         db.run('DELETE FROM appointments');
         for (const r of apptRes.rows) {
           db.run(`INSERT INTO appointments (id, patient_id, appointment_date, appointment_time, department, doctor_name, reason, status, arrived_at, created_at)
@@ -375,7 +393,7 @@ async function initDB() {
 
       // 7. Lab Reports
       const labRes = await pool.query('SELECT * FROM lab_reports ORDER BY id ASC');
-      if (labRes && labRes.rows.length > 0) {
+      if (labRes) {
         db.run('DELETE FROM lab_reports');
         for (const r of labRes.rows) {
           db.run(`INSERT INTO lab_reports (id, patient_id, visit_id, test_name, result, normal_range, status, notes, created_at)
@@ -387,7 +405,7 @@ async function initDB() {
 
       // 8. Notifications
       const notifRes = await pool.query('SELECT * FROM notifications ORDER BY id ASC');
-      if (notifRes && notifRes.rows.length > 0) {
+      if (notifRes) {
         db.run('DELETE FROM notifications');
         for (const r of notifRes.rows) {
           db.run(`INSERT INTO notifications (id, patient_id, visit_id, appointment_id, channel, recipient, subject, content, status, sent_at)
@@ -400,6 +418,8 @@ async function initDB() {
       console.log('[Database] Supabase synchronization complete.');
     } catch (err) {
       console.warn('[Database] Supabase initial sync warning:', err.message);
+    } finally {
+      try { db.run('PRAGMA foreign_keys = ON'); } catch (e) {}
     }
   } else {
     // Offline local fallback seeding
@@ -423,21 +443,6 @@ async function initDB() {
         run('INSERT OR IGNORE INTO departments (name, description) VALUES (?, ?)', [d.name, d.description]);
       }
       console.log('Seeded initial hospital departments.');
-    }
-
-    const countRow = get('SELECT COUNT(*) AS count FROM doctors');
-    if (countRow.count === 0) {
-      run('INSERT INTO doctors (name, department, specialization) VALUES (?, ?, ?)',
-          ['Dr. Sarah Johnson', 'Cardiology', 'Cardiology']);
-      run('INSERT INTO doctors (name, department, specialization) VALUES (?, ?, ?)',
-          ['Dr. Michael Chen', 'General Medicine', 'General Medicine']);
-      run('INSERT INTO doctors (name, department, specialization) VALUES (?, ?, ?)',
-          ['Dr. Emily Williams', 'Orthopedics', 'Orthopedics']);
-      run('INSERT INTO doctors (name, department, specialization) VALUES (?, ?, ?)',
-          ['Dr. James Brown', 'Neurology', 'Neurology']);
-      run('INSERT INTO doctors (name, department, specialization) VALUES (?, ?, ?)',
-          ['Dr. Lisa Anderson', 'Pediatrics', 'Pediatrics']);
-      console.log('Seeded 5 sample doctors.');
     }
   }
 
@@ -871,14 +876,19 @@ function markArrival(patientId) {
     const updatedAppointment = get('SELECT * FROM appointments WHERE id = ?', [appointment.id]);
     return { appointment: updatedAppointment, visit, isWalkIn: false };
   } else {
-    // Walk-in arrival: create an appointment record for today's queue and an active visit
+    // Walk-in arrival: dynamically assign available doctor or Duty Physician
     const currentTimeStr = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+    const activeDoc = get("SELECT name FROM doctors WHERE department = 'General Medicine' AND status = 'active' LIMIT 1") ||
+                      get("SELECT name FROM doctors WHERE status = 'active' LIMIT 1") ||
+                      get("SELECT name FROM doctors LIMIT 1");
+    const assignedDoc = activeDoc ? activeDoc.name : 'Duty Physician';
+
     const apptResult = createAppointment({
       patient_id: patientId,
       appointment_date: today,
       appointment_time: currentTimeStr,
       department: 'General Medicine',
-      doctor_name: 'Dr. Michael Chen',
+      doctor_name: assignedDoc,
       reason: 'Walk-in Consultation',
       status: 'arrived',
     });
@@ -889,7 +899,7 @@ function markArrival(patientId) {
       patient_id: patientId,
       check_in_time: now,
       department: 'General Medicine',
-      doctor_name: 'Dr. Michael Chen',
+      doctor_name: assignedDoc,
       status: 'checked_in',
     });
 
@@ -1035,8 +1045,9 @@ async function updateDoctor(id, data) {
 async function deleteDoctor(id) {
   const doc = getDoctorById(id);
   if (!doc) return false;
-  run('DELETE FROM doctors WHERE id = ?', [id]);
-  await pgQuery('DELETE FROM doctors WHERE id = $1', [id]);
+  const numId = parseInt(id, 10) || id;
+  run('DELETE FROM doctors WHERE id = ?', [numId]);
+  await pgQuery('DELETE FROM doctors WHERE id = $1', [numId]);
   return true;
 }
 
@@ -1204,6 +1215,7 @@ function getNotificationById(id) {
 
 module.exports = {
   initDB,
+  getPgPool,
   getPatientByCardUID,
   getPatientByCardUIDRaw,
   createPatient,

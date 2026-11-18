@@ -6,16 +6,32 @@ const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
 
 let pgPool = null;
+
+function formatSupabaseUrl(url) {
+  if (!url) return url;
+  let formatted = String(url).trim();
+  if ((formatted.startsWith('"') && formatted.endsWith('"')) || (formatted.startsWith("'") && formatted.endsWith("'"))) {
+    formatted = formatted.slice(1, -1).trim();
+  }
+  if (formatted.includes('db.buhcundujbwmikttksji.supabase.co')) {
+    formatted = formatted
+      .replace(/@db\.[a-z0-9]+\.supabase\.co(?::5432)?/, '@aws-1-ap-northeast-2.pooler.supabase.com:6543')
+      .replace('postgres:', 'postgres.buhcundujbwmikttksji:');
+  }
+  return formatted;
+}
+
 function getPgPool() {
   if (pgPool) return pgPool;
-  const databaseUrl = process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL;
+  const rawUrl = process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL;
+  const databaseUrl = formatSupabaseUrl(rawUrl);
   if (databaseUrl) {
     try {
       pgPool = new Pool({
         connectionString: databaseUrl,
         ssl: { rejectUnauthorized: false },
-        max: 5,
-        idleTimeoutMillis: 30000,
+        max: process.env.VERCEL ? 2 : 5,
+        idleTimeoutMillis: 10000,
         connectionTimeoutMillis: 10000
       });
     } catch (e) {}

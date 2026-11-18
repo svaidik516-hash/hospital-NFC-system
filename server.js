@@ -663,10 +663,23 @@ app.delete('/api/doctors/:id', requireAdmin, auditMiddleware('DOCTOR_DELETED', (
 });
 
 // ─── Health / Status Endpoint ──────────────────────────────────────────────────
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
+  let cloudStatus = 'disabled';
+  let cloudError = null;
+  const pool = db.getPgPool();
+  if (pool) {
+    try {
+      await pool.query('SELECT 1');
+      cloudStatus = 'connected';
+    } catch (err) {
+      cloudStatus = 'disconnected';
+      cloudError = err.message;
+    }
+  }
   res.json({
     status: 'ok',
-    database: process.env.DATABASE_URL ? 'supabase-cloud' : 'local-memory',
+    database: cloudStatus,
+    cloudError,
     environment: process.env.VERCEL ? 'vercel' : 'local',
     timestamp: new Date().toISOString()
   });

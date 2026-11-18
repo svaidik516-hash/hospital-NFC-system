@@ -856,7 +856,7 @@ async function initDoctorDesk() {
 
     if (notifEmail) notifEmail.value = patient.contact_email || '';
     if (notifPhone) notifPhone.value = patient.contact_phone || '';
-    if (followupDoctor) followupDoctor.value = selectedDoctor || 'Dr. Sarah Johnson';
+    if (followupDoctor) followupDoctor.value = selectedDoctor || '';
     if (followupDept) followupDept.value = 'Cardiology';
     if (followupReason) followupReason.value = 'Follow-up consultation and medication review';
 
