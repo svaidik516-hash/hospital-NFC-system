@@ -317,6 +317,15 @@ async function initDB() {
     try {
       console.log('[Database] Synchronizing persistent state from Supabase...');
       db.run('PRAGMA foreign_keys = OFF');
+
+      // Synchronize PostgreSQL sequences with max(id) across all tables
+      const seqTables = ['patients', 'doctors', 'departments', 'visits', 'prescriptions', 'appointments', 'lab_reports', 'notifications'];
+      for (const t of seqTables) {
+        try {
+          await pool.query(`SELECT setval('${t}_id_seq', COALESCE((SELECT MAX(id) FROM ${t}), 0) + 1, false)`);
+        } catch (seqErr) {}
+      }
+
       // 1. Departments
       let deptsRes = await pool.query('SELECT * FROM departments ORDER BY id ASC');
       if (deptsRes && deptsRes.rows.length === 0) {
@@ -603,6 +612,52 @@ async function createPatient(data) {
     }
   }
 
+  const pool = getPgPool();
+  let assignedPatient = null;
+  if (pool) {
+    try {
+      const pRes = await pool.query(`
+        INSERT INTO patients (card_uid, first_name, last_name, date_of_birth, age, gender,
+          blood_group, contact_phone, contact_email, emergency_contact_name, emergency_contact_phone,
+          emergency_contact_relation, address, allergies, chronic_conditions, insurance_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        RETURNING *
+      `, [
+        encrypted.card_uid, encrypted.first_name, encrypted.last_name,
+        encrypted.date_of_birth || null, encrypted.age || null, encrypted.gender || null,
+        encrypted.blood_group || null, encrypted.contact_phone || null, encrypted.contact_email || null,
+        encrypted.emergency_contact_name || null, encrypted.emergency_contact_phone || null,
+        encrypted.emergency_contact_relation || null, encrypted.address || null,
+        encrypted.allergies || null, encrypted.chronic_conditions || null, encrypted.insurance_id || null
+      ]);
+      if (pRes && pRes.rows.length > 0) {
+        assignedPatient = pRes.rows[0];
+      }
+    } catch (err) {
+      console.warn('[Database] Supabase createPatient error:', err.message);
+    }
+  }
+
+  if (assignedPatient) {
+    run(`
+      INSERT OR REPLACE INTO patients (id, card_uid, first_name, last_name, date_of_birth, age, gender,
+        blood_group, contact_phone, contact_email, emergency_contact_name,
+        emergency_contact_phone, emergency_contact_relation, address,
+        allergies, chronic_conditions, insurance_id, registered_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      assignedPatient.id, assignedPatient.card_uid, assignedPatient.first_name, assignedPatient.last_name,
+      assignedPatient.date_of_birth, assignedPatient.age, assignedPatient.gender,
+      assignedPatient.blood_group, assignedPatient.contact_phone, assignedPatient.contact_email,
+      assignedPatient.emergency_contact_name, assignedPatient.emergency_contact_phone,
+      assignedPatient.emergency_contact_relation, assignedPatient.address,
+      assignedPatient.allergies, assignedPatient.chronic_conditions, assignedPatient.insurance_id,
+      assignedPatient.registered_at ? new Date(assignedPatient.registered_at).toISOString() : nowDatetime(),
+      assignedPatient.updated_at ? new Date(assignedPatient.updated_at).toISOString() : nowDatetime()
+    ]);
+    return get('SELECT * FROM patients WHERE id = ?', [assignedPatient.id]);
+  }
+
   const { lastId } = run(`
     INSERT INTO patients (card_uid, first_name, last_name, date_of_birth, age, gender,
       blood_group, contact_phone, contact_email, emergency_contact_name,
@@ -627,29 +682,7 @@ async function createPatient(data) {
     encrypted.chronic_conditions || null,
     encrypted.insurance_id || null,
   ]);
-  const newPatient = get('SELECT * FROM patients WHERE id = ?', [lastId]);
-  if (newPatient) {
-    await pgQuery(`
-      INSERT INTO patients (id, card_uid, first_name, last_name, date_of_birth, age, gender,
-        blood_group, contact_phone, contact_email, emergency_contact_name, emergency_contact_phone,
-        emergency_contact_relation, address, allergies, chronic_conditions, insurance_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-      ON CONFLICT (id) DO UPDATE SET
-        card_uid = EXCLUDED.card_uid, first_name = EXCLUDED.first_name, last_name = EXCLUDED.last_name,
-        date_of_birth = EXCLUDED.date_of_birth, age = EXCLUDED.age, gender = EXCLUDED.gender,
-        blood_group = EXCLUDED.blood_group, contact_phone = EXCLUDED.contact_phone,
-        contact_email = EXCLUDED.contact_email, emergency_contact_name = EXCLUDED.emergency_contact_name,
-        emergency_contact_phone = EXCLUDED.emergency_contact_phone, emergency_contact_relation = EXCLUDED.emergency_contact_relation,
-        address = EXCLUDED.address, allergies = EXCLUDED.allergies, chronic_conditions = EXCLUDED.chronic_conditions,
-        insurance_id = EXCLUDED.insurance_id, updated_at = NOW()
-    `, [
-      newPatient.id, newPatient.card_uid, newPatient.first_name, newPatient.last_name, newPatient.date_of_birth,
-      newPatient.age, newPatient.gender, newPatient.blood_group, newPatient.contact_phone, newPatient.contact_email,
-      newPatient.emergency_contact_name, newPatient.emergency_contact_phone, newPatient.emergency_contact_relation,
-      newPatient.address, newPatient.allergies, newPatient.chronic_conditions, newPatient.insurance_id
-    ]);
-  }
-  return newPatient;
+  return get('SELECT * FROM patients WHERE id = ?', [lastId]);
 }
 
 async function updatePatient(id, data) {
@@ -663,8 +696,13 @@ async function updatePatient(id, data) {
   const sensitive = ['allergies', 'chronic_conditions', 'insurance_id', 'address',
     'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relation'];
 
+  const numId = parseInt(id, 10) || id;
   const sets = [];
   const values = [];
+  const pgSets = [];
+  const pgValues = [];
+  let paramIdx = 1;
+
   for (const field of allowedFields) {
     if (data[field] !== undefined) {
       let value = data[field];
@@ -674,30 +712,29 @@ async function updatePatient(id, data) {
       }
       sets.push(`${field} = ?`);
       values.push(value);
+      pgSets.push(`${field} = $${paramIdx++}`);
+      pgValues.push(value);
     }
   }
-  if (sets.length === 0) return get('SELECT * FROM patients WHERE id = ?', [id]);
 
-  sets.push("updated_at = datetime('now','localtime')");
-  values.push(id);
-  run(`UPDATE patients SET ${sets.join(', ')} WHERE id = ?`, values);
-  const updated = get('SELECT * FROM patients WHERE id = ?', [id]);
-  if (updated) {
-    await pgQuery(`
-      UPDATE patients SET
-        card_uid = $2, first_name = $3, last_name = $4, date_of_birth = $5, age = $6, gender = $7,
-        blood_group = $8, contact_phone = $9, contact_email = $10, emergency_contact_name = $11,
-        emergency_contact_phone = $12, emergency_contact_relation = $13, address = $14,
-        allergies = $15, chronic_conditions = $16, insurance_id = $17, updated_at = NOW()
-      WHERE id = $1
-    `, [
-      updated.id, updated.card_uid, updated.first_name, updated.last_name, updated.date_of_birth,
-      updated.age, updated.gender, updated.blood_group, updated.contact_phone, updated.contact_email,
-      updated.emergency_contact_name, updated.emergency_contact_phone, updated.emergency_contact_relation,
-      updated.address, updated.allergies, updated.chronic_conditions, updated.insurance_id
-    ]);
+  const pool = getPgPool();
+  if (pool && pgSets.length > 0) {
+    pgSets.push('updated_at = NOW()');
+    pgValues.push(numId);
+    try {
+      await pool.query(`UPDATE patients SET ${pgSets.join(', ')} WHERE id = $${paramIdx}`, pgValues);
+    } catch (err) {
+      console.warn('[Database] Supabase updatePatient error:', err.message);
+    }
   }
-  return updated;
+
+  if (sets.length > 0) {
+    sets.push("updated_at = datetime('now','localtime')");
+    values.push(numId);
+    run(`UPDATE patients SET ${sets.join(', ')} WHERE id = ?`, values);
+  }
+
+  return get('SELECT * FROM patients WHERE id = ?', [numId]);
 }
 
 async function getAllPatients(canDecrypt = false) {
@@ -730,34 +767,53 @@ async function getAllPatients(canDecrypt = false) {
     .map(p => maybeDecryptPatient(p, canDecrypt));
 }
 
-function searchPatients(query) {
+async function searchPatients(query, canDecrypt = false) {
   const q = `%${query}%`;
+  const pool = getPgPool();
+  if (pool) {
+    try {
+      const res = await pool.query(`
+        SELECT * FROM patients
+        WHERE first_name ILIKE $1 OR last_name ILIKE $1 OR contact_phone ILIKE $1 OR card_uid ILIKE $1
+        ORDER BY first_name ASC
+      `, [q]);
+      if (res && res.rows) {
+        return res.rows.map(p => maybeDecryptPatient(p, canDecrypt));
+      }
+    } catch (e) {
+      console.warn('[Database] searchPatients cloud sync warning:', e.message);
+    }
+  }
   return all(`
     SELECT * FROM patients
     WHERE first_name LIKE ? OR last_name LIKE ? OR contact_phone LIKE ? OR card_uid LIKE ?
     ORDER BY first_name
-  `, [q, q, q, q]);
+  `, [q, q, q, q]).map(p => maybeDecryptPatient(p, canDecrypt));
 }
 
 async function deletePatient(id) {
-  // Delete child records in both SQLite and Supabase to respect FK constraints
-  run('DELETE FROM notifications WHERE patient_id = ?', [id]);
-  await pgQuery('DELETE FROM notifications WHERE patient_id = $1', [id]);
+  const numId = parseInt(id, 10) || id;
+  const pool = getPgPool();
+  if (pool) {
+    try {
+      await pool.query('DELETE FROM notifications WHERE patient_id = $1', [numId]);
+      await pool.query('DELETE FROM lab_reports WHERE patient_id = $1', [numId]);
+      await pool.query('DELETE FROM prescriptions WHERE patient_id = $1', [numId]);
+      await pool.query('DELETE FROM visits WHERE patient_id = $1', [numId]);
+      await pool.query('DELETE FROM appointments WHERE patient_id = $1', [numId]);
+      await pool.query('DELETE FROM patients WHERE id = $1', [numId]);
+    } catch (err) {
+      console.warn('[Database] Supabase deletePatient error:', err.message);
+    }
+  }
 
-  run('DELETE FROM lab_reports WHERE patient_id = ?', [id]);
-  await pgQuery('DELETE FROM lab_reports WHERE patient_id = $1', [id]);
-
-  run('DELETE FROM prescriptions WHERE patient_id = ?', [id]);
-  await pgQuery('DELETE FROM prescriptions WHERE patient_id = $1', [id]);
-
-  run('DELETE FROM visits WHERE patient_id = ?', [id]);
-  await pgQuery('DELETE FROM visits WHERE patient_id = $1', [id]);
-
-  run('DELETE FROM appointments WHERE patient_id = ?', [id]);
-  await pgQuery('DELETE FROM appointments WHERE patient_id = $1', [id]);
-
-  const res = run('DELETE FROM patients WHERE id = ?', [id]);
-  await pgQuery('DELETE FROM patients WHERE id = $1', [id]);
+  // Delete child records in SQLite to respect FK constraints
+  run('DELETE FROM notifications WHERE patient_id = ?', [numId]);
+  run('DELETE FROM lab_reports WHERE patient_id = ?', [numId]);
+  run('DELETE FROM prescriptions WHERE patient_id = ?', [numId]);
+  run('DELETE FROM visits WHERE patient_id = ?', [numId]);
+  run('DELETE FROM appointments WHERE patient_id = ?', [numId]);
+  const res = run('DELETE FROM patients WHERE id = ?', [numId]);
   return res.changes > 0;
 }
 
@@ -765,7 +821,7 @@ async function deletePatient(id) {
 //  VISIT OPERATIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function createVisit(data) {
+async function createVisit(data) {
   // Encrypt sensitive clinical fields at rest
   const visitSensitive = ['diagnosis', 'symptoms', 'vitals', 'notes'];
   const encrypted = { ...data };
@@ -773,6 +829,50 @@ function createVisit(data) {
     if (encrypted[field] && !isEncrypted(encrypted[field])) {
       encrypted[field] = encryptField(encrypted[field]);
     }
+  }
+
+  const pool = getPgPool();
+  let assignedVisit = null;
+  if (pool) {
+    try {
+      const vRes = await pool.query(`
+        INSERT INTO visits (patient_id, visit_date, check_in_time, check_out_time, department, doctor_name,
+          diagnosis, symptoms, vitals, notes, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        RETURNING *
+      `, [
+        encrypted.patient_id,
+        encrypted.visit_date || todayDate(),
+        encrypted.check_in_time || null,
+        encrypted.check_out_time || null,
+        encrypted.department || null,
+        encrypted.doctor_name || null,
+        encrypted.diagnosis || null,
+        encrypted.symptoms || null,
+        encrypted.vitals || null,
+        encrypted.notes || null,
+        encrypted.status || 'checked_in',
+      ]);
+      if (vRes && vRes.rows.length > 0) {
+        assignedVisit = vRes.rows[0];
+      }
+    } catch (err) {
+      console.warn('[Database] Supabase createVisit error:', err.message);
+    }
+  }
+
+  if (assignedVisit) {
+    run(`
+      INSERT OR REPLACE INTO visits (id, patient_id, visit_date, check_in_time, check_out_time, department, doctor_name,
+        diagnosis, symptoms, vitals, notes, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      assignedVisit.id, assignedVisit.patient_id, assignedVisit.visit_date, assignedVisit.check_in_time,
+      assignedVisit.check_out_time, assignedVisit.department, assignedVisit.doctor_name,
+      assignedVisit.diagnosis, assignedVisit.symptoms, assignedVisit.vitals, assignedVisit.notes,
+      assignedVisit.status, assignedVisit.created_at ? new Date(assignedVisit.created_at).toISOString() : nowDatetime()
+    ]);
+    return get('SELECT * FROM visits WHERE id = ?', [assignedVisit.id]);
   }
 
   const { lastId } = run(`
@@ -791,18 +891,10 @@ function createVisit(data) {
     encrypted.notes || null,
     encrypted.status || 'checked_in',
   ]);
-  const visit = get('SELECT * FROM visits WHERE id = ?', [lastId]);
-  if (visit) {
-    pgQuery(`
-      INSERT INTO visits (id, patient_id, visit_date, check_in_time, check_out_time, department, doctor_name, diagnosis, symptoms, vitals, notes, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-      ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, check_out_time = EXCLUDED.check_out_time
-    `, [visit.id, visit.patient_id, visit.visit_date, visit.check_in_time, visit.check_out_time, visit.department, visit.doctor_name, visit.diagnosis, visit.symptoms, visit.vitals, visit.notes, visit.status]);
-  }
-  return visit;
+  return get('SELECT * FROM visits WHERE id = ?', [lastId]);
 }
 
-function updateVisit(id, data) {
+async function updateVisit(id, data) {
   const allowedFields = [
     'check_in_time', 'check_out_time', 'department', 'doctor_name',
     'diagnosis', 'symptoms', 'vitals', 'notes', 'status',
@@ -810,8 +902,13 @@ function updateVisit(id, data) {
 
   const visitSensitive = ['diagnosis', 'symptoms', 'vitals', 'notes'];
 
+  const numId = parseInt(id, 10) || id;
   const sets = [];
   const values = [];
+  const pgSets = [];
+  const pgValues = [];
+  let paramIdx = 1;
+
   for (const field of allowedFields) {
     if (data[field] !== undefined) {
       let value = data[field];
@@ -821,34 +918,77 @@ function updateVisit(id, data) {
       }
       sets.push(`${field} = ?`);
       values.push(value);
+      pgSets.push(`${field} = $${paramIdx++}`);
+      pgValues.push(value);
     }
   }
-  if (sets.length === 0) return get('SELECT * FROM visits WHERE id = ?', [id]);
 
-  values.push(id);
-  run(`UPDATE visits SET ${sets.join(', ')} WHERE id = ?`, values);
-  const updated = get('SELECT * FROM visits WHERE id = ?', [id]);
-  if (updated) {
-    pgQuery(`
-      UPDATE visits SET check_in_time = $2, check_out_time = $3, department = $4, doctor_name = $5,
-        diagnosis = $6, symptoms = $7, vitals = $8, notes = $9, status = $10 WHERE id = $1
-    `, [updated.id, updated.check_in_time, updated.check_out_time, updated.department, updated.doctor_name, updated.diagnosis, updated.symptoms, updated.vitals, updated.notes, updated.status]);
+  const pool = getPgPool();
+  if (pool && pgSets.length > 0) {
+    pgValues.push(numId);
+    try {
+      await pool.query(`UPDATE visits SET ${pgSets.join(', ')} WHERE id = $${paramIdx}`, pgValues);
+    } catch (err) {
+      console.warn('[Database] Supabase updateVisit error:', err.message);
+    }
   }
-  return updated;
+
+  if (sets.length > 0) {
+    values.push(numId);
+    run(`UPDATE visits SET ${sets.join(', ')} WHERE id = ?`, values);
+  }
+
+  return get('SELECT * FROM visits WHERE id = ?', [numId]);
 }
 
-function getVisitsByPatient(patientId, canDecrypt = false) {
-  return all('SELECT * FROM visits WHERE patient_id = ? ORDER BY visit_date DESC', [patientId])
+async function getVisitsByPatient(patientId, canDecrypt = false) {
+  const numId = parseInt(patientId, 10) || patientId;
+  const pool = getPgPool();
+  if (pool) {
+    try {
+      const res = await pool.query('SELECT * FROM visits WHERE patient_id = $1 ORDER BY visit_date DESC, id DESC', [numId]);
+      if (res && res.rows) {
+        return res.rows.map(v => maybeDecryptVisit(v, canDecrypt));
+      }
+    } catch (err) {
+      console.warn('[Database] Supabase getVisitsByPatient error:', err.message);
+    }
+  }
+  return all('SELECT * FROM visits WHERE patient_id = ? ORDER BY visit_date DESC', [numId])
     .map(v => maybeDecryptVisit(v, canDecrypt));
 }
 
-function getPrescriptionsByPatient(patientId, canDecrypt = false) {
-  return all('SELECT * FROM prescriptions WHERE patient_id = ? ORDER BY prescribed_at DESC', [patientId])
+async function getPrescriptionsByPatient(patientId, canDecrypt = false) {
+  const numId = parseInt(patientId, 10) || patientId;
+  const pool = getPgPool();
+  if (pool) {
+    try {
+      const res = await pool.query('SELECT * FROM prescriptions WHERE patient_id = $1 ORDER BY prescribed_at DESC, id DESC', [numId]);
+      if (res && res.rows) {
+        return res.rows.map(p => maybeDecryptPrescription(p, canDecrypt));
+      }
+    } catch (err) {
+      console.warn('[Database] Supabase getPrescriptionsByPatient error:', err.message);
+    }
+  }
+  return all('SELECT * FROM prescriptions WHERE patient_id = ? ORDER BY prescribed_at DESC', [numId])
     .map(p => maybeDecryptPrescription(p, canDecrypt));
 }
 
-function getPrescriptionsByVisit(visitId, canDecrypt = false) {
-  return all('SELECT * FROM prescriptions WHERE visit_id = ? ORDER BY prescribed_at DESC', [visitId])
+async function getPrescriptionsByVisit(visitId, canDecrypt = false) {
+  const numId = parseInt(visitId, 10) || visitId;
+  const pool = getPgPool();
+  if (pool) {
+    try {
+      const res = await pool.query('SELECT * FROM prescriptions WHERE visit_id = $1 ORDER BY prescribed_at DESC, id DESC', [numId]);
+      if (res && res.rows) {
+        return res.rows.map(p => maybeDecryptPrescription(p, canDecrypt));
+      }
+    } catch (err) {
+      console.warn('[Database] Supabase getPrescriptionsByVisit error:', err.message);
+    }
+  }
+  return all('SELECT * FROM prescriptions WHERE visit_id = ? ORDER BY prescribed_at DESC', [numId])
     .map(p => maybeDecryptPrescription(p, canDecrypt));
 }
 
@@ -856,7 +996,7 @@ function getPrescriptionsByVisit(visitId, canDecrypt = false) {
 //  PRESCRIPTION OPERATIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function createPrescription(data) {
+async function createPrescription(data) {
   // Encrypt sensitive prescription fields at rest
   const rxSensitive = ['medicine_name', 'dosage', 'frequency', 'duration', 'instructions'];
   const encrypted = { ...data };
@@ -864,6 +1004,47 @@ function createPrescription(data) {
     if (encrypted[field] && !isEncrypted(encrypted[field])) {
       encrypted[field] = encryptField(encrypted[field]);
     }
+  }
+
+  const pool = getPgPool();
+  let assignedRx = null;
+  if (pool) {
+    try {
+      const res = await pool.query(`
+        INSERT INTO prescriptions (visit_id, patient_id, medicine_name, dosage, frequency,
+          duration, instructions, prescribed_by)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING *
+      `, [
+        encrypted.visit_id || null,
+        encrypted.patient_id,
+        encrypted.medicine_name,
+        encrypted.dosage || null,
+        encrypted.frequency || null,
+        encrypted.duration || null,
+        encrypted.instructions || null,
+        encrypted.prescribed_by || null,
+      ]);
+      if (res && res.rows.length > 0) {
+        assignedRx = res.rows[0];
+      }
+    } catch (err) {
+      console.warn('[Database] Supabase createPrescription error:', err.message);
+    }
+  }
+
+  if (assignedRx) {
+    run(`
+      INSERT OR REPLACE INTO prescriptions (id, visit_id, patient_id, medicine_name, dosage, frequency,
+        duration, instructions, prescribed_by, prescribed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      assignedRx.id, assignedRx.visit_id, assignedRx.patient_id, assignedRx.medicine_name,
+      assignedRx.dosage, assignedRx.frequency, assignedRx.duration, assignedRx.instructions,
+      assignedRx.prescribed_by,
+      assignedRx.prescribed_at ? new Date(assignedRx.prescribed_at).toISOString() : nowDatetime()
+    ]);
+    return get('SELECT * FROM prescriptions WHERE id = ?', [assignedRx.id]);
   }
 
   const { lastId } = run(`
@@ -880,22 +1061,54 @@ function createPrescription(data) {
     encrypted.instructions || null,
     encrypted.prescribed_by || null,
   ]);
-  const presc = get('SELECT * FROM prescriptions WHERE id = ?', [lastId]);
-  if (presc) {
-    pgQuery(`
-      INSERT INTO prescriptions (id, visit_id, patient_id, medicine_name, dosage, frequency, duration, instructions, prescribed_by)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      ON CONFLICT (id) DO NOTHING
-    `, [presc.id, presc.visit_id, presc.patient_id, presc.medicine_name, presc.dosage, presc.frequency, presc.duration, presc.instructions, presc.prescribed_by]);
-  }
-  return presc;
+  return get('SELECT * FROM prescriptions WHERE id = ?', [lastId]);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  APPOINTMENT OPERATIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function createAppointment(data) {
+async function createAppointment(data) {
+  const pool = getPgPool();
+  let assignedAppt = null;
+  if (pool) {
+    try {
+      const res = await pool.query(`
+        INSERT INTO appointments (patient_id, appointment_date, appointment_time, department,
+          doctor_name, reason, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING *
+      `, [
+        data.patient_id,
+        data.appointment_date,
+        data.appointment_time || null,
+        data.department || null,
+        data.doctor_name || null,
+        data.reason || null,
+        data.status || 'scheduled'
+      ]);
+      if (res && res.rows.length > 0) {
+        assignedAppt = res.rows[0];
+      }
+    } catch (err) {
+      console.warn('[Database] Supabase createAppointment error:', err.message);
+    }
+  }
+
+  if (assignedAppt) {
+    run(`
+      INSERT OR REPLACE INTO appointments (id, patient_id, appointment_date, appointment_time, department,
+        doctor_name, reason, status, arrived_at, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      assignedAppt.id, assignedAppt.patient_id, assignedAppt.appointment_date, assignedAppt.appointment_time,
+      assignedAppt.department, assignedAppt.doctor_name, assignedAppt.reason, assignedAppt.status,
+      assignedAppt.arrived_at ? new Date(assignedAppt.arrived_at).toISOString() : null,
+      assignedAppt.created_at ? new Date(assignedAppt.created_at).toISOString() : nowDatetime()
+    ]);
+    return get('SELECT * FROM appointments WHERE id = ?', [assignedAppt.id]);
+  }
+
   const { lastId } = run(`
     INSERT INTO appointments (patient_id, appointment_date, appointment_time, department,
       doctor_name, reason, status)
@@ -909,15 +1122,7 @@ function createAppointment(data) {
     data.reason || null,
     data.status || 'scheduled',
   ]);
-  const appt = get('SELECT * FROM appointments WHERE id = ?', [lastId]);
-  if (appt) {
-    pgQuery(`
-      INSERT INTO appointments (id, patient_id, appointment_date, appointment_time, department, doctor_name, reason, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      ON CONFLICT (id) DO NOTHING
-    `, [appt.id, appt.patient_id, appt.appointment_date, appt.appointment_time, appt.department, appt.doctor_name, appt.reason, appt.status]);
-  }
-  return appt;
+  return get('SELECT * FROM appointments WHERE id = ?', [lastId]);
 }
 
 async function getAppointmentsByDate(date) {
@@ -929,7 +1134,7 @@ async function getAppointmentsByDate(date) {
         FROM appointments a
         JOIN patients p ON a.patient_id = p.id
         WHERE a.appointment_date = $1
-        ORDER BY a.appointment_time ASC
+        ORDER BY a.appointment_time ASC, a.id ASC
       `, [date]);
       if (res && res.rows) {
         return res.rows;
@@ -951,40 +1156,77 @@ async function getTodayAppointments() {
   return await getAppointmentsByDate(todayDate());
 }
 
-function getTodayArrivals() {
+async function getTodayArrivals() {
+  const today = todayDate();
+  const pool = getPgPool();
+  if (pool) {
+    try {
+      const res = await pool.query(`
+        SELECT a.*, p.first_name, p.last_name, p.card_uid, p.contact_phone
+        FROM appointments a
+        JOIN patients p ON a.patient_id = p.id
+        WHERE a.appointment_date = $1 AND a.status = 'arrived'
+        ORDER BY a.arrived_at DESC, a.id DESC
+      `, [today]);
+      if (res && res.rows) {
+        return res.rows;
+      }
+    } catch (e) {
+      console.warn('[Database] getTodayArrivals cloud sync warning:', e.message);
+    }
+  }
   return all(`
     SELECT a.*, p.first_name, p.last_name, p.card_uid, p.contact_phone
     FROM appointments a
     JOIN patients p ON a.patient_id = p.id
     WHERE a.appointment_date = ? AND a.status = 'arrived'
     ORDER BY a.arrived_at DESC
-  `, [todayDate()]);
+  `, [today]);
 }
 
-function markArrival(patientId) {
+async function markArrival(patientId) {
+  const numId = parseInt(patientId, 10) || patientId;
   const today = todayDate();
   const now = nowDatetime();
+  const pool = getPgPool();
 
-  const appointment = get(`
-    SELECT * FROM appointments
-    WHERE patient_id = ? AND appointment_date = ? AND status = 'scheduled'
-    ORDER BY appointment_time
-    LIMIT 1
-  `, [patientId, today]);
+  let appointment = null;
+  if (pool) {
+    try {
+      const res = await pool.query(`
+        SELECT * FROM appointments
+        WHERE patient_id = $1 AND appointment_date = $2 AND status = 'scheduled'
+        ORDER BY appointment_time ASC, id ASC
+        LIMIT 1
+      `, [numId, today]);
+      if (res && res.rows.length > 0) {
+        appointment = res.rows[0];
+      }
+    } catch (e) {}
+  }
+  if (!appointment) {
+    appointment = get(`
+      SELECT * FROM appointments
+      WHERE patient_id = ? AND appointment_date = ? AND status = 'scheduled'
+      ORDER BY appointment_time
+      LIMIT 1
+    `, [numId, today]);
+  }
 
   if (appointment) {
-    run('UPDATE appointments SET status = ?, arrived_at = ? WHERE id = ?', ['arrived', now, appointment.id]);
-    pgQuery('UPDATE appointments SET status = $2, arrived_at = $3 WHERE id = $1', [appointment.id, 'arrived', now]);
+    await updateAppointment(appointment.id, { status: 'arrived', arrived_at: now });
 
-    const visit = createVisit({
-      patient_id: patientId,
+    const visit = await createVisit({
+      patient_id: numId,
       check_in_time: now,
       department: appointment.department,
       doctor_name: appointment.doctor_name,
       status: 'checked_in',
     });
 
-    const updatedAppointment = get('SELECT * FROM appointments WHERE id = ?', [appointment.id]);
+    const updatedAppointment = pool ?
+      (await pool.query('SELECT * FROM appointments WHERE id = $1', [appointment.id])).rows[0] :
+      get('SELECT * FROM appointments WHERE id = ?', [appointment.id]);
     return { appointment: updatedAppointment, visit, isWalkIn: false };
   } else {
     // Walk-in arrival: dynamically assign available doctor or Duty Physician
@@ -994,8 +1236,8 @@ function markArrival(patientId) {
                       get("SELECT name FROM doctors LIMIT 1");
     const assignedDoc = activeDoc ? activeDoc.name : 'Duty Physician';
 
-    const apptResult = createAppointment({
-      patient_id: patientId,
+    const apptResult = await createAppointment({
+      patient_id: numId,
       appointment_date: today,
       appointment_time: currentTimeStr,
       department: 'General Medicine',
@@ -1003,56 +1245,67 @@ function markArrival(patientId) {
       reason: 'Walk-in Consultation',
       status: 'arrived',
     });
-    run('UPDATE appointments SET arrived_at = ? WHERE id = ?', [now, apptResult.id]);
-    pgQuery('UPDATE appointments SET arrived_at = $2 WHERE id = $1', [apptResult.id, now]);
+    await updateAppointment(apptResult.id, { arrived_at: now });
 
-    const visit = createVisit({
-      patient_id: patientId,
+    const visit = await createVisit({
+      patient_id: numId,
       check_in_time: now,
       department: 'General Medicine',
       doctor_name: assignedDoc,
       status: 'checked_in',
     });
 
-    const updatedAppointment = get('SELECT * FROM appointments WHERE id = ?', [apptResult.id]);
+    const updatedAppointment = pool ?
+      (await pool.query('SELECT * FROM appointments WHERE id = $1', [apptResult.id])).rows[0] :
+      get('SELECT * FROM appointments WHERE id = ?', [apptResult.id]);
     return { appointment: updatedAppointment, visit, isWalkIn: true };
   }
 }
 
-/**
- * Get patient by card UID WITHOUT decryption (admin audit only - shows raw encrypted data)
- * @returns {object|null} Patient record with encrypted fields
- */
-function getPatientByCardUIDRaw(uid) {
-  if (!uid) return null;
-  const cleanUid = String(uid).trim();
-  return get('SELECT * FROM patients WHERE LOWER(card_uid) = LOWER(?)', [cleanUid]);
-}
-
-function updateAppointment(id, data) {
+async function updateAppointment(id, data) {
   const allowedFields = [
     'appointment_date', 'appointment_time', 'department', 'doctor_name',
     'reason', 'status', 'arrived_at',
   ];
+  const numId = parseInt(id, 10) || id;
   const sets = [];
   const values = [];
+  const pgSets = [];
+  const pgValues = [];
+  let paramIdx = 1;
+
   for (const field of allowedFields) {
     if (data[field] !== undefined) {
       sets.push(`${field} = ?`);
       values.push(data[field]);
+      pgSets.push(`${field} = $${paramIdx++}`);
+      pgValues.push(data[field]);
     }
   }
-  if (sets.length === 0) return get('SELECT * FROM appointments WHERE id = ?', [id]);
-  values.push(id);
-  run(`UPDATE appointments SET ${sets.join(', ')} WHERE id = ?`, values);
-  return get('SELECT * FROM appointments WHERE id = ?', [id]);
+
+  const pool = getPgPool();
+  if (pool && pgSets.length > 0) {
+    pgValues.push(numId);
+    try {
+      await pool.query(`UPDATE appointments SET ${pgSets.join(', ')} WHERE id = $${paramIdx}`, pgValues);
+    } catch (err) {
+      console.warn('[Database] Supabase updateAppointment error:', err.message);
+    }
+  }
+
+  if (sets.length > 0) {
+    values.push(numId);
+    run(`UPDATE appointments SET ${sets.join(', ')} WHERE id = ?`, values);
+  }
+
+  return get('SELECT * FROM appointments WHERE id = ?', [numId]);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  LAB REPORT OPERATIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function createLabReport(data) {
+async function createLabReport(data) {
   // Encrypt sensitive lab report fields at rest
   const labSensitive = ['test_name', 'result', 'normal_range', 'notes'];
   const encrypted = { ...data };
@@ -1060,6 +1313,43 @@ function createLabReport(data) {
     if (encrypted[field] && !isEncrypted(encrypted[field])) {
       encrypted[field] = encryptField(encrypted[field]);
     }
+  }
+
+  const pool = getPgPool();
+  let assignedReport = null;
+  if (pool) {
+    try {
+      const res = await pool.query(`
+        INSERT INTO lab_reports (patient_id, visit_id, test_name, result, normal_range, status, notes)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING *
+      `, [
+        encrypted.patient_id,
+        encrypted.visit_id || null,
+        encrypted.test_name,
+        encrypted.result || null,
+        encrypted.normal_range || null,
+        encrypted.status || 'pending',
+        encrypted.notes || null,
+      ]);
+      if (res && res.rows.length > 0) {
+        assignedReport = res.rows[0];
+      }
+    } catch (err) {
+      console.warn('[Database] Supabase createLabReport error:', err.message);
+    }
+  }
+
+  if (assignedReport) {
+    run(`
+      INSERT OR REPLACE INTO lab_reports (id, patient_id, visit_id, test_name, result, normal_range, status, notes, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      assignedReport.id, assignedReport.patient_id, assignedReport.visit_id, assignedReport.test_name,
+      assignedReport.result, assignedReport.normal_range, assignedReport.status, assignedReport.notes,
+      assignedReport.created_at ? new Date(assignedReport.created_at).toISOString() : nowDatetime()
+    ]);
+    return get('SELECT * FROM lab_reports WHERE id = ?', [assignedReport.id]);
   }
 
   const { lastId } = run(`
@@ -1074,25 +1364,29 @@ function createLabReport(data) {
     encrypted.status || 'pending',
     encrypted.notes || null,
   ]);
-  const report = get('SELECT * FROM lab_reports WHERE id = ?', [lastId]);
-  if (report) {
-    pgQuery(`
-      INSERT INTO lab_reports (id, patient_id, visit_id, test_name, result, normal_range, status, notes)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      ON CONFLICT (id) DO UPDATE SET result = EXCLUDED.result, status = EXCLUDED.status, notes = EXCLUDED.notes
-    `, [report.id, report.patient_id, report.visit_id, report.test_name, report.result, report.normal_range, report.status, report.notes]);
-  }
-  return report;
+  return get('SELECT * FROM lab_reports WHERE id = ?', [lastId]);
 }
 
-function getLabReportsByPatient(patientId, canDecrypt = false) {
-  return all('SELECT * FROM lab_reports WHERE patient_id = ? ORDER BY created_at DESC', [patientId])
+async function getLabReportsByPatient(patientId, canDecrypt = false) {
+  const numId = parseInt(patientId, 10) || patientId;
+  const pool = getPgPool();
+  if (pool) {
+    try {
+      const res = await pool.query('SELECT * FROM lab_reports WHERE patient_id = $1 ORDER BY created_at DESC, id DESC', [numId]);
+      if (res && res.rows) {
+        return res.rows.map(lr => canDecrypt ? decryptLabReportData(lr) : lr);
+      }
+    } catch (err) {
+      console.warn('[Database] Supabase getLabReportsByPatient error:', err.message);
+    }
+  }
+  return all('SELECT * FROM lab_reports WHERE patient_id = ? ORDER BY created_at DESC', [numId])
     .map(lr => canDecrypt ? decryptLabReportData(lr) : lr);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  DOCTOR OPERATIONS
-// ══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
 
 async function getDoctors() {
   const pool = getPgPool();
@@ -1134,6 +1428,40 @@ async function getDoctorById(id) {
 }
 
 async function createDoctor(data) {
+  const pool = getPgPool();
+  let assignedDoc = null;
+  if (pool) {
+    try {
+      const res = await pool.query(`
+        INSERT INTO doctors (name, department, specialization, contact, status)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING *
+      `, [
+        data.name,
+        data.department || null,
+        data.specialization || null,
+        data.contact || null,
+        data.status || 'active'
+      ]);
+      if (res && res.rows.length > 0) {
+        assignedDoc = res.rows[0];
+      }
+    } catch (err) {
+      console.warn('[Database] Supabase createDoctor error:', err.message);
+    }
+  }
+
+  if (assignedDoc) {
+    run(`
+      INSERT OR REPLACE INTO doctors (id, name, department, specialization, contact, status)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `, [
+      assignedDoc.id, assignedDoc.name, assignedDoc.department || null,
+      assignedDoc.specialization || null, assignedDoc.contact || null, assignedDoc.status || 'active'
+    ]);
+    return getDoctorById(assignedDoc.id);
+  }
+
   const { lastId } = run(`
     INSERT INTO doctors (name, department, specialization, contact, status)
     VALUES (?, ?, ?, ?, ?)
@@ -1144,52 +1472,56 @@ async function createDoctor(data) {
     data.contact || null,
     data.status || 'active',
   ]);
-  const newDoc = get('SELECT * FROM doctors WHERE id = ?', [lastId]);
-  if (newDoc) {
-    await pgQuery(`
-      INSERT INTO doctors (id, name, department, specialization, contact, status)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      ON CONFLICT (id) DO UPDATE SET
-        name = EXCLUDED.name, department = EXCLUDED.department,
-        specialization = EXCLUDED.specialization, contact = EXCLUDED.contact, status = EXCLUDED.status
-    `, [newDoc.id, newDoc.name, newDoc.department, newDoc.specialization, newDoc.contact, newDoc.status]);
-  }
-  return newDoc;
+  return getDoctorById(lastId);
 }
 
 async function updateDoctor(id, data) {
+  const numId = parseInt(id, 10) || id;
   const allowed = ['name', 'department', 'specialization', 'contact', 'status'];
   const sets = [];
   const params = [];
+  const pgSets = [];
+  const pgParams = [];
+  let paramIdx = 1;
 
   for (const field of allowed) {
     if (data[field] !== undefined) {
       sets.push(`${field} = ?`);
       params.push(data[field]);
+      pgSets.push(`${field} = $${paramIdx++}`);
+      pgParams.push(data[field]);
     }
   }
 
-  if (sets.length === 0) {
-    return getDoctorById(id);
+  const pool = getPgPool();
+  if (pool && pgSets.length > 0) {
+    pgParams.push(numId);
+    try {
+      await pool.query(`UPDATE doctors SET ${pgSets.join(', ')} WHERE id = $${paramIdx}`, pgParams);
+    } catch (err) {
+      console.warn('[Database] Supabase updateDoctor error:', err.message);
+    }
   }
 
-  params.push(id);
-  run(`UPDATE doctors SET ${sets.join(', ')} WHERE id = ?`, params);
-  const updated = getDoctorById(id);
-  if (updated) {
-    await pgQuery(`
-      UPDATE doctors SET name = $2, department = $3, specialization = $4, contact = $5, status = $6 WHERE id = $1
-    `, [updated.id, updated.name, updated.department, updated.specialization, updated.contact, updated.status]);
+  if (sets.length > 0) {
+    params.push(numId);
+    run(`UPDATE doctors SET ${sets.join(', ')} WHERE id = ?`, params);
   }
-  return updated;
+
+  return getDoctorById(numId);
 }
 
 async function deleteDoctor(id) {
-  const doc = getDoctorById(id);
-  if (!doc) return false;
   const numId = parseInt(id, 10) || id;
+  const pool = getPgPool();
+  if (pool) {
+    try {
+      await pool.query('DELETE FROM doctors WHERE id = $1', [numId]);
+    } catch (err) {
+      console.warn('[Database] Supabase deleteDoctor error:', err.message);
+    }
+  }
   run('DELETE FROM doctors WHERE id = ?', [numId]);
-  await pgQuery('DELETE FROM doctors WHERE id = $1', [numId]);
   return true;
 }
 
@@ -1201,8 +1533,36 @@ async function getDepartments() {
   const pool = getPgPool();
   if (pool) {
     try {
-      const res = await pool.query('SELECT * FROM departments ORDER BY name ASC');
+      let res = await pool.query('SELECT * FROM departments ORDER BY name ASC');
+      if (!res || res.rows.length === 0) {
+        const defaultDepts = [
+          { name: 'General Medicine', description: 'Primary adult care, internal medicine and wellness checks' },
+          { name: 'Cardiology', description: 'Heart, cardiovascular diagnostics and intervention' },
+          { name: 'Orthopedics', description: 'Bones, joints, spine and musculoskeletal trauma' },
+          { name: 'Neurology', description: 'Brain, spinal cord, nerves and neurological disorders' },
+          { name: 'Pediatrics', description: 'Infant, child and adolescent health and immunization' },
+          { name: 'Dermatology', description: 'Skin, hair, nails and cosmetic dermatology' },
+          { name: 'ENT', description: 'Ear, nose, throat and head & neck clinical care' },
+          { name: 'Ophthalmology', description: 'Comprehensive eye care, vision and corrective surgery' },
+          { name: 'Emergency & Trauma', description: '24/7 urgent resuscitation and acute critical intervention' },
+          { name: 'Obstetrics & Gynecology', description: 'Maternity, prenatal delivery and women health services' },
+          { name: 'Radiology & Imaging', description: 'Diagnostic X-Ray, CT scans, Ultrasound and MRI' },
+          { name: 'General Surgery', description: 'Elective and emergency surgical procedures' }
+        ];
+        for (const d of defaultDepts) {
+          try {
+            await pool.query('INSERT INTO departments (name, description) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING', [d.name, d.description]);
+          } catch (e) {}
+        }
+        res = await pool.query('SELECT * FROM departments ORDER BY name ASC');
+      }
+
       if (res && res.rows && res.rows.length > 0) {
+        db.run('DELETE FROM departments');
+        for (const r of res.rows) {
+          db.run('INSERT INTO departments (id, name, description, created_at) VALUES (?, ?, ?, ?)',
+            [r.id, r.name, r.description, r.created_at ? new Date(r.created_at).toISOString() : null]);
+        }
         return res.rows.map(d => {
           const docCount = get('SELECT COUNT(*) AS count FROM doctors WHERE department = ?', [d.name]);
           return {
@@ -1215,6 +1575,7 @@ async function getDepartments() {
       console.warn('[Database] getDepartments cloud sync warning:', e.message);
     }
   }
+
   const depts = all('SELECT * FROM departments ORDER BY name ASC');
   return depts.map(d => {
     const docCount = get('SELECT COUNT(*) AS count FROM doctors WHERE department = ?', [d.name]);
@@ -1225,62 +1586,103 @@ async function getDepartments() {
   });
 }
 
-function getDepartmentById(id) {
-  return get('SELECT * FROM departments WHERE id = ?', [id]);
+async function getDepartmentById(id) {
+  const numId = parseInt(id, 10) || id;
+  const pool = getPgPool();
+  if (pool) {
+    try {
+      const res = await pool.query('SELECT * FROM departments WHERE id = $1', [numId]);
+      if (res && res.rows.length > 0) return res.rows[0];
+    } catch (e) {}
+  }
+  return get('SELECT * FROM departments WHERE id = ?', [numId]);
 }
 
-function getDepartmentByName(name) {
-  return get('SELECT * FROM departments WHERE LOWER(name) = LOWER(?)', [name.trim()]);
+async function getDepartmentByName(name) {
+  if (!name) return null;
+  const cleanName = String(name).trim();
+  const pool = getPgPool();
+  if (pool) {
+    try {
+      const res = await pool.query('SELECT * FROM departments WHERE LOWER(name) = LOWER($1) LIMIT 1', [cleanName]);
+      if (res && res.rows.length > 0) return res.rows[0];
+    } catch (e) {}
+  }
+  return get('SELECT * FROM departments WHERE LOWER(name) = LOWER(?)', [cleanName]);
 }
 
-function createDepartment(data) {
+async function createDepartment(data) {
   const name = data.name.trim();
   const description = data.description ? data.description.trim() : null;
+  const pool = getPgPool();
+  let assignedDept = null;
+  if (pool) {
+    try {
+      const res = await pool.query('INSERT INTO departments (name, description) VALUES ($1, $2) RETURNING *', [name, description]);
+      if (res && res.rows.length > 0) {
+        assignedDept = res.rows[0];
+      }
+    } catch (err) {
+      console.warn('[Database] Supabase createDepartment error:', err.message);
+    }
+  }
+
+  if (assignedDept) {
+    run('INSERT OR REPLACE INTO departments (id, name, description, created_at) VALUES (?, ?, ?, ?)',
+      [assignedDept.id, assignedDept.name, assignedDept.description, assignedDept.created_at ? new Date(assignedDept.created_at).toISOString() : nowDatetime()]);
+    return assignedDept;
+  }
+
   const { lastId } = run(`
     INSERT INTO departments (name, description)
     VALUES (?, ?)
   `, [name, description]);
-  const dept = getDepartmentById(lastId);
-  if (dept) {
-    pgQuery('INSERT INTO departments (id, name, description) VALUES ($1, $2, $3) ON CONFLICT (name) DO NOTHING', [dept.id, dept.name, dept.description]);
-  }
-  return dept;
+  return get('SELECT * FROM departments WHERE id = ?', [lastId]);
 }
 
-function updateDepartment(id, data) {
-  const existing = getDepartmentById(id);
+async function updateDepartment(id, data) {
+  const numId = parseInt(id, 10) || id;
+  const existing = await getDepartmentById(numId);
   if (!existing) return null;
 
   const newName = data.name !== undefined ? data.name.trim() : existing.name;
   const newDesc = data.description !== undefined ? (data.description ? data.description.trim() : null) : existing.description;
 
-  run('UPDATE departments SET name = ?, description = ? WHERE id = ?', [newName, newDesc, id]);
+  const pool = getPgPool();
+  if (pool) {
+    try {
+      await pool.query('UPDATE departments SET name = $2, description = $3 WHERE id = $1', [numId, newName, newDesc]);
+      if (newName !== existing.name) {
+        await pool.query('UPDATE doctors SET department = $1 WHERE department = $2', [newName, existing.name]);
+        await pool.query('UPDATE appointments SET department = $1 WHERE department = $2', [newName, existing.name]);
+        await pool.query('UPDATE visits SET department = $1 WHERE department = $2', [newName, existing.name]);
+      }
+    } catch (err) {
+      console.warn('[Database] Supabase updateDepartment error:', err.message);
+    }
+  }
 
-  // If department name was modified, cascade to doctors, appointments and visits
+  run('UPDATE departments SET name = ?, description = ? WHERE id = ?', [newName, newDesc, numId]);
   if (newName !== existing.name) {
     run('UPDATE doctors SET department = ? WHERE department = ?', [newName, existing.name]);
     run('UPDATE appointments SET department = ? WHERE department = ?', [newName, existing.name]);
     run('UPDATE visits SET department = ? WHERE department = ?', [newName, existing.name]);
   }
 
-  const updated = getDepartmentById(id);
-  if (updated) {
-    pgQuery('UPDATE departments SET name = $2, description = $3 WHERE id = $1', [updated.id, updated.name, updated.description]);
-    if (newName !== existing.name) {
-      pgQuery('UPDATE doctors SET department = $1 WHERE department = $2', [newName, existing.name]);
-      pgQuery('UPDATE appointments SET department = $1 WHERE department = $2', [newName, existing.name]);
-      pgQuery('UPDATE visits SET department = $1 WHERE department = $2', [newName, existing.name]);
-    }
-  }
-
-  return updated;
+  return await getDepartmentById(numId);
 }
 
-function deleteDepartment(id) {
-  const dept = getDepartmentById(id);
-  if (!dept) return false;
-  run('DELETE FROM departments WHERE id = ?', [id]);
-  pgQuery('DELETE FROM departments WHERE id = $1', [id]);
+async function deleteDepartment(id) {
+  const numId = parseInt(id, 10) || id;
+  const pool = getPgPool();
+  if (pool) {
+    try {
+      await pool.query('DELETE FROM departments WHERE id = $1', [numId]);
+    } catch (err) {
+      console.warn('[Database] Supabase deleteDepartment error:', err.message);
+    }
+  }
+  run('DELETE FROM departments WHERE id = ?', [numId]);
   return true;
 }
 
@@ -1288,8 +1690,28 @@ function deleteDepartment(id) {
 //  DASHBOARD
 // ══════════════════════════════════════════════════════════════════════════════
 
-function getDashboardStats() {
+async function getDashboardStats() {
   const today = todayDate();
+  const pool = getPgPool();
+  if (pool) {
+    try {
+      const [pRes, aRes, arrRes, vRes] = await Promise.all([
+        pool.query('SELECT COUNT(*) AS count FROM patients'),
+        pool.query('SELECT COUNT(*) AS count FROM appointments WHERE appointment_date = $1', [today]),
+        pool.query("SELECT COUNT(*) AS count FROM appointments WHERE appointment_date = $1 AND status = 'arrived'", [today]),
+        pool.query("SELECT COUNT(*) AS count FROM visits WHERE visit_date = $1 AND status = 'checked_in'", [today])
+      ]);
+      return {
+        totalPatients: parseInt(pRes.rows[0].count, 10) || 0,
+        todayAppointments: parseInt(aRes.rows[0].count, 10) || 0,
+        todayArrivals: parseInt(arrRes.rows[0].count, 10) || 0,
+        activeVisits: parseInt(vRes.rows[0].count, 10) || 0,
+      };
+    } catch (e) {
+      console.warn('[Database] getDashboardStats Supabase warning:', e.message);
+    }
+  }
+
   const totalPatients = get('SELECT COUNT(*) AS count FROM patients').count;
   const todayAppointments = get('SELECT COUNT(*) AS count FROM appointments WHERE appointment_date = ?', [today]).count;
   const todayArrivals = get("SELECT COUNT(*) AS count FROM appointments WHERE appointment_date = ? AND status = 'arrived'", [today]).count;
@@ -1307,18 +1729,21 @@ async function getFullPatientRecord(cardUID, canDecrypt = false) {
   if (!patient) return null;
 
   const decryptedPatient = patient;
+  const pool = getPgPool();
 
-  const visits = all('SELECT * FROM visits WHERE patient_id = ? ORDER BY visit_date DESC', [decryptedPatient.id])
-    .map(v => {
-      const decryptedVisit = maybeDecryptVisit(v, canDecrypt);
-      decryptedVisit.prescriptions = all('SELECT * FROM prescriptions WHERE visit_id = ? ORDER BY prescribed_at DESC', [v.id])
-        .map(p => maybeDecryptPrescription(p, canDecrypt));
-      return decryptedVisit;
-    });
+  let visits = decryptedPatient.visits || [];
+  let appointments = decryptedPatient.appointments || [];
+  let labReports = decryptedPatient.lab_reports || [];
+  let notifications = [];
 
-  const appointments = all('SELECT * FROM appointments WHERE patient_id = ? ORDER BY appointment_date DESC', [decryptedPatient.id]);
-  const labReports = all('SELECT * FROM lab_reports WHERE patient_id = ? ORDER BY created_at DESC', [decryptedPatient.id]);
-  const notifications = all('SELECT * FROM notifications WHERE patient_id = ? ORDER BY sent_at DESC', [decryptedPatient.id]);
+  if (pool) {
+    try {
+      const notifRes = await pool.query('SELECT * FROM notifications WHERE patient_id = $1 ORDER BY sent_at DESC, id DESC', [decryptedPatient.id]);
+      notifications = notifRes.rows;
+    } catch (e) {}
+  } else {
+    notifications = all('SELECT * FROM notifications WHERE patient_id = ? ORDER BY sent_at DESC', [decryptedPatient.id]);
+  }
 
   return {
     ...decryptedPatient,
@@ -1335,7 +1760,45 @@ async function getFullPatientRecord(cardUID, canDecrypt = false) {
 //  NOTIFICATION OPERATIONS
 // ══════════════════════════════════════════════════════════════════════════════
 
-function createNotification(data) {
+async function createNotification(data) {
+  const pool = getPgPool();
+  let assignedNotif = null;
+  if (pool) {
+    try {
+      const res = await pool.query(`
+        INSERT INTO notifications (patient_id, visit_id, appointment_id, channel, recipient, subject, content, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING *
+      `, [
+        data.patient_id,
+        data.visit_id || null,
+        data.appointment_id || null,
+        data.channel,
+        data.recipient,
+        data.subject || null,
+        data.content,
+        data.status || 'sent',
+      ]);
+      if (res && res.rows.length > 0) {
+        assignedNotif = res.rows[0];
+      }
+    } catch (err) {
+      console.warn('[Database] Supabase createNotification error:', err.message);
+    }
+  }
+
+  if (assignedNotif) {
+    run(`
+      INSERT OR REPLACE INTO notifications (id, patient_id, visit_id, appointment_id, channel, recipient, subject, content, status, sent_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      assignedNotif.id, assignedNotif.patient_id, assignedNotif.visit_id, assignedNotif.appointment_id,
+      assignedNotif.channel, assignedNotif.recipient, assignedNotif.subject, assignedNotif.content,
+      assignedNotif.status, assignedNotif.sent_at ? new Date(assignedNotif.sent_at).toISOString() : nowDatetime()
+    ]);
+    return get('SELECT * FROM notifications WHERE id = ?', [assignedNotif.id]);
+  }
+
   const { lastId } = run(`
     INSERT INTO notifications (patient_id, visit_id, appointment_id, channel, recipient, subject, content, status)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -1349,23 +1812,31 @@ function createNotification(data) {
     data.content,
     data.status || 'sent',
   ]);
-  const notif = get('SELECT * FROM notifications WHERE id = ?', [lastId]);
-  if (notif) {
-    pgQuery(`
-      INSERT INTO notifications (id, patient_id, visit_id, appointment_id, channel, recipient, subject, content, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      ON CONFLICT (id) DO NOTHING
-    `, [notif.id, notif.patient_id, notif.visit_id, notif.appointment_id, notif.channel, notif.recipient, notif.subject, notif.content, notif.status]);
+  return get('SELECT * FROM notifications WHERE id = ?', [lastId]);
+}
+
+async function getNotificationsByPatient(patientId) {
+  const numId = parseInt(patientId, 10) || patientId;
+  const pool = getPgPool();
+  if (pool) {
+    try {
+      const res = await pool.query('SELECT * FROM notifications WHERE patient_id = $1 ORDER BY sent_at DESC, id DESC', [numId]);
+      if (res && res.rows) return res.rows;
+    } catch (e) {}
   }
-  return notif;
+  return all('SELECT * FROM notifications WHERE patient_id = ? ORDER BY sent_at DESC', [numId]);
 }
 
-function getNotificationsByPatient(patientId) {
-  return all('SELECT * FROM notifications WHERE patient_id = ? ORDER BY sent_at DESC', [patientId]);
-}
-
-function getNotificationById(id) {
-  return get('SELECT * FROM notifications WHERE id = ?', [id]);
+async function getNotificationById(id) {
+  const numId = parseInt(id, 10) || id;
+  const pool = getPgPool();
+  if (pool) {
+    try {
+      const res = await pool.query('SELECT * FROM notifications WHERE id = $1', [numId]);
+      if (res && res.rows.length > 0) return res.rows[0];
+    } catch (e) {}
+  }
+  return get('SELECT * FROM notifications WHERE id = ?', [numId]);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
