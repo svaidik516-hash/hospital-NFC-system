@@ -5,8 +5,8 @@
 
 document.addEventListener('DOMContentLoaded', () => {
   const loginForm = document.getElementById('loginForm');
-  const loginEmail = document.getElementById('loginEmail');
-  const loginPassword = document.getElementById('loginPassword');
+  const loginEmail = document.getElementById('loginEmail') || document.getElementById('email');
+  const loginPassword = document.getElementById('loginPassword') || document.getElementById('password');
   const btnLogin = document.getElementById('btnLogin');
   const togglePassword = document.getElementById('togglePassword');
 

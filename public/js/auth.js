@@ -868,6 +868,8 @@ const Auth = {
     logout,
     refreshAccessToken,
     authenticatedFetch,
+    fetch: authenticatedFetch,
+    getToken: getAccessToken,
     init: initAuth,
     initAuth,
     checkAuthOnLoad,

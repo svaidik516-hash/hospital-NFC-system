@@ -72,8 +72,9 @@
     </div>
   </div>
 
-  <script type="module">
-    import { Auth } from '/js/auth.js';
+  <script src="/js/auth.js?v=2.4"></script>
+  <script>
+    const Auth = window.Auth;
 
     // Toast notification system using style.css classes
     function showToast(message, type = 'info') {

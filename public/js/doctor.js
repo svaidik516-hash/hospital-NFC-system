@@ -857,7 +857,7 @@ async function initDoctorDesk() {
     if (notifEmail) notifEmail.value = patient.contact_email || '';
     if (notifPhone) notifPhone.value = patient.contact_phone || '';
     if (followupDoctor) followupDoctor.value = selectedDoctor || '';
-    if (followupDept) followupDept.value = 'Cardiology';
+    if (followupDept) followupDept.value = (patient.visits && patient.visits[0] && patient.visits[0].department) || 'General Medicine';
     if (followupReason) followupReason.value = 'Follow-up consultation and medication review';
 
     // Default next appointment to 14 days from today

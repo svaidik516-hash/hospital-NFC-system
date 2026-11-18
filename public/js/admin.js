@@ -187,6 +187,14 @@ async function initAdmin() {
   }
 
   // ── Auto-calculate Age from DOB ────────────────────────────────────
+  if (btnGenerateUID && regCardUID) {
+    btnGenerateUID.addEventListener('click', () => {
+      const hex = Array.from({ length: 4 }, () => Math.floor(Math.random() * 256).toString(16).padStart(2, '0').toUpperCase()).join('');
+      regCardUID.value = `NFC-${hex}`;
+      showToast(`Auto-generated Card UID: NFC-${hex}`, 'info');
+    });
+  }
+
   if (regDOB) {
     regDOB.addEventListener('change', () => {
       const dob = new Date(regDOB.value);
