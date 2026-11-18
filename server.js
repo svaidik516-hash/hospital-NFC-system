@@ -282,14 +282,15 @@ app.get('/api/patients', requireDoctorOrReception, auditMiddleware('PATIENTS_LIS
   }
 });
 
-// GET /api/patients/search?q= - search (no decryption needed)
-app.get('/api/patients/search', requireDoctorOrReception, auditMiddleware('PATIENTS_SEARCH'), (req, res) => {
+// GET /api/patients/search?q= - search (Admin: decrypted, Doctor: decrypted, Reception: encrypted)
+app.get('/api/patients/search', requireDoctorOrReception, auditMiddleware('PATIENTS_SEARCH'), async (req, res) => {
   try {
     const query = req.query.q;
     if (!query) {
       return res.status(400).json({ error: 'Search query parameter "q" is required' });
     }
-    const patients = db.searchPatients(query);
+    const canDecrypt = getDecryptPermission(req);
+    const patients = await db.searchPatients(query, canDecrypt);
     res.json(patients);
   } catch (err) {
     console.error('GET /api/patients/search error:', err.message);
@@ -367,13 +368,13 @@ app.delete('/api/patients/:id', requireAdmin, auditMiddleware('PATIENT_DELETED',
 // ─── VISIT ROUTES ────────────────────────────────────────────────────────────────
 
 // POST /api/visits - create visit (doctor, admin)
-app.post('/api/visits', requireDoctor, auditMiddleware('VISIT_CREATED', (req, res) => ({ visitId: res.locals?.visitId, patientId: req.body.patient_id })), (req, res) => {
+app.post('/api/visits', requireDoctor, auditMiddleware('VISIT_CREATED', (req, res) => ({ visitId: res.locals?.visitId, patientId: req.body.patient_id })), async (req, res) => {
   try {
     const data = req.body;
     if (!data.patient_id) {
       return res.status(400).json({ error: 'patient_id is required' });
     }
-    const visit = db.createVisit(data);
+    const visit = await db.createVisit(data);
     res.locals.visitId = visit.id;
     res.status(201).json(visit);
   } catch (err) {
@@ -383,9 +384,9 @@ app.post('/api/visits', requireDoctor, auditMiddleware('VISIT_CREATED', (req, re
 });
 
 // PUT /api/visits/:id - update visit (doctor, admin)
-app.put('/api/visits/:id', requireDoctor, auditMiddleware('VISIT_UPDATED', (req) => ({ visitId: req.params.id })), (req, res) => {
+app.put('/api/visits/:id', requireDoctor, auditMiddleware('VISIT_UPDATED', (req) => ({ visitId: req.params.id })), async (req, res) => {
   try {
-    const visit = db.updateVisit(parseInt(req.params.id), req.body);
+    const visit = await db.updateVisit(parseInt(req.params.id), req.body);
     if (!visit) {
       return res.status(404).json({ error: 'Visit not found' });
     }
@@ -397,10 +398,10 @@ app.put('/api/visits/:id', requireDoctor, auditMiddleware('VISIT_UPDATED', (req)
 });
 
 // GET /api/visits/patient/:patientId - get visits for patient (doctor: decrypted, reception: encrypted)
-app.get('/api/visits/patient/:patientId', requireDoctorOrReception, auditMiddleware('VISITS_LIST', (req) => ({ patientId: req.params.patientId, canDecrypt: getDecryptPermission(req) })), (req, res) => {
+app.get('/api/visits/patient/:patientId', requireDoctorOrReception, auditMiddleware('VISITS_LIST', (req) => ({ patientId: req.params.patientId, canDecrypt: getDecryptPermission(req) })), async (req, res) => {
   try {
     const canDecrypt = getDecryptPermission(req);
-    const visits = db.getVisitsByPatient(parseInt(req.params.patientId), canDecrypt);
+    const visits = await db.getVisitsByPatient(parseInt(req.params.patientId), canDecrypt);
     res.json(visits);
   } catch (err) {
     console.error('GET /api/visits/patient/:patientId error:', err.message);
@@ -411,13 +412,13 @@ app.get('/api/visits/patient/:patientId', requireDoctorOrReception, auditMiddlew
 // ─── PRESCRIPTION ROUTES ──────────────────────────────────────────────────────────
 
 // POST /api/prescriptions - create prescription (doctor, admin)
-app.post('/api/prescriptions', requireDoctor, auditMiddleware('PRESCRIPTION_CREATED', (req, res) => ({ prescriptionId: res.locals?.prescriptionId, patientId: req.body.patient_id })), (req, res) => {
+app.post('/api/prescriptions', requireDoctor, auditMiddleware('PRESCRIPTION_CREATED', (req, res) => ({ prescriptionId: res.locals?.prescriptionId, patientId: req.body.patient_id })), async (req, res) => {
   try {
     const data = req.body;
     if (!data.patient_id || !data.medicine_name) {
       return res.status(400).json({ error: 'patient_id and medicine_name are required' });
     }
-    const prescription = db.createPrescription(data);
+    const prescription = await db.createPrescription(data);
     res.locals.prescriptionId = prescription.id;
     const canDecrypt = getDecryptPermission(req);
     res.status(201).json(db.maybeDecryptPrescription ? db.maybeDecryptPrescription(prescription, canDecrypt) : prescription);
@@ -428,10 +429,10 @@ app.post('/api/prescriptions', requireDoctor, auditMiddleware('PRESCRIPTION_CREA
 });
 
 // GET /api/prescriptions/patient/:patientId - get prescriptions (doctor: decrypted, reception: encrypted)
-app.get('/api/prescriptions/patient/:patientId', requireDoctorOrReception, auditMiddleware('PRESCRIPTIONS_LIST', (req) => ({ patientId: req.params.patientId, canDecrypt: getDecryptPermission(req) })), (req, res) => {
+app.get('/api/prescriptions/patient/:patientId', requireDoctorOrReception, auditMiddleware('PRESCRIPTIONS_LIST', (req) => ({ patientId: req.params.patientId, canDecrypt: getDecryptPermission(req) })), async (req, res) => {
   try {
     const canDecrypt = getDecryptPermission(req);
-    const prescriptions = db.getPrescriptionsByPatient(parseInt(req.params.patientId), canDecrypt);
+    const prescriptions = await db.getPrescriptionsByPatient(parseInt(req.params.patientId), canDecrypt);
     res.json(prescriptions);
   } catch (err) {
     console.error('GET /api/prescriptions/patient/:patientId error:', err.message);
@@ -440,10 +441,10 @@ app.get('/api/prescriptions/patient/:patientId', requireDoctorOrReception, audit
 });
 
 // GET /api/prescriptions/visit/:visitId - get prescriptions for visit (doctor: decrypted, reception: encrypted)
-app.get('/api/prescriptions/visit/:visitId', requireDoctorOrReception, auditMiddleware('PRESCRIPTIONS_LIST', (req) => ({ visitId: req.params.visitId, canDecrypt: getDecryptPermission(req) })), (req, res) => {
+app.get('/api/prescriptions/visit/:visitId', requireDoctorOrReception, auditMiddleware('PRESCRIPTIONS_LIST', (req) => ({ visitId: req.params.visitId, canDecrypt: getDecryptPermission(req) })), async (req, res) => {
   try {
     const canDecrypt = getDecryptPermission(req);
-    const prescriptions = db.getPrescriptionsByVisit(parseInt(req.params.visitId), canDecrypt);
+    const prescriptions = await db.getPrescriptionsByVisit(parseInt(req.params.visitId), canDecrypt);
     res.json(prescriptions);
   } catch (err) {
     console.error('GET /api/prescriptions/visit/:visitId error:', err.message);
@@ -454,13 +455,13 @@ app.get('/api/prescriptions/visit/:visitId', requireDoctorOrReception, auditMidd
 // ─── APPOINTMENT ROUTES ───────────────────────────────────────────────────────────
 
 // POST /api/appointments - create appointment (reception, admin)
-app.post('/api/appointments', requireReception, auditMiddleware('APPOINTMENT_CREATED', (req, res) => ({ appointmentId: res.locals?.appointmentId, patientId: req.body.patient_id })), (req, res) => {
+app.post('/api/appointments', requireReception, auditMiddleware('APPOINTMENT_CREATED', (req, res) => ({ appointmentId: res.locals?.appointmentId, patientId: req.body.patient_id })), async (req, res) => {
   try {
     const data = req.body;
     if (!data.patient_id || !data.appointment_date) {
       return res.status(400).json({ error: 'patient_id and appointment_date are required' });
     }
-    const appointment = db.createAppointment(data);
+    const appointment = await db.createAppointment(data);
     res.locals.appointmentId = appointment.id;
     res.status(201).json(appointment);
   } catch (err) {
@@ -492,10 +493,10 @@ app.get('/api/appointments/date/:date', requireDoctorOrReception, auditMiddlewar
 });
 
 // PUT /api/appointments/:id - update appointment (reception, admin)
-app.put('/api/appointments/:id', requireReception, auditMiddleware('APPOINTMENT_UPDATED', (req) => ({ appointmentId: req.params.id })), (req, res) => {
+app.put('/api/appointments/:id', requireReception, auditMiddleware('APPOINTMENT_UPDATED', (req) => ({ appointmentId: req.params.id })), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const updated = db.updateAppointment(id, req.body);
+    const updated = await db.updateAppointment(id, req.body);
     if (!updated) {
       return res.status(404).json({ error: 'Appointment not found' });
     }
@@ -523,7 +524,7 @@ app.post('/api/checkin', requireReception, auditMiddleware('PATIENT_CHECKIN', (r
     }
 
     // Mark arrival (creates or updates visit too)
-    const arrival = db.markArrival(patient.id);
+    const arrival = await db.markArrival(patient.id);
     res.locals.patientId = patient.id;
     res.locals.isWalkIn = arrival.isWalkIn;
 
@@ -560,13 +561,13 @@ app.post('/api/checkin', requireReception, auditMiddleware('PATIENT_CHECKIN', (r
 // ─── LAB REPORT ROUTES ────────────────────────────────────────────────────────────
 
 // POST /api/lab-reports - create lab report (doctor, admin)
-app.post('/api/lab-reports', requireDoctor, auditMiddleware('LAB_REPORT_CREATED', (req, res) => ({ reportId: res.locals?.reportId, patientId: req.body.patient_id })), (req, res) => {
+app.post('/api/lab-reports', requireDoctor, auditMiddleware('LAB_REPORT_CREATED', (req, res) => ({ reportId: res.locals?.reportId, patientId: req.body.patient_id })), async (req, res) => {
   try {
     const data = req.body;
     if (!data.patient_id || !data.test_name) {
       return res.status(400).json({ error: 'patient_id and test_name are required' });
     }
-    const report = db.createLabReport(data);
+    const report = await db.createLabReport(data);
     res.locals.reportId = report.id;
     res.status(201).json(report);
   } catch (err) {
@@ -576,10 +577,10 @@ app.post('/api/lab-reports', requireDoctor, auditMiddleware('LAB_REPORT_CREATED'
 });
 
 // GET /api/lab-reports/patient/:patientId - get lab reports (doctor: decrypted, reception: encrypted)
-app.get('/api/lab-reports/patient/:patientId', requireDoctorOrReception, auditMiddleware('LAB_REPORTS_LIST', (req) => ({ patientId: req.params.patientId, canDecrypt: getDecryptPermission(req) })), (req, res) => {
+app.get('/api/lab-reports/patient/:patientId', requireDoctorOrReception, auditMiddleware('LAB_REPORTS_LIST', (req) => ({ patientId: req.params.patientId, canDecrypt: getDecryptPermission(req) })), async (req, res) => {
   try {
     const canDecrypt = getDecryptPermission(req);
-    const reports = db.getLabReportsByPatient(parseInt(req.params.patientId), canDecrypt);
+    const reports = await db.getLabReportsByPatient(parseInt(req.params.patientId), canDecrypt);
     res.json(reports);
   } catch (err) {
     console.error('GET /api/lab-reports/patient/:patientId error:', err.message);
@@ -701,9 +702,9 @@ app.get('/api/departments', auth.requireAuth(), async (req, res) => {
 });
 
 // GET /api/departments/:id - get single department
-app.get('/api/departments/:id', auth.requireAuth(), (req, res) => {
+app.get('/api/departments/:id', auth.requireAuth(), async (req, res) => {
   try {
-    const dept = db.getDepartmentById(req.params.id);
+    const dept = await db.getDepartmentById(req.params.id);
     if (!dept) {
       return res.status(404).json({ error: 'Department not found' });
     }
@@ -715,17 +716,17 @@ app.get('/api/departments/:id', auth.requireAuth(), (req, res) => {
 });
 
 // POST /api/departments - add new hospital department (admin only)
-app.post('/api/departments', requireAdmin, auditMiddleware('DEPARTMENT_CREATED', (req, res) => ({ departmentId: res.locals?.deptId })), (req, res) => {
+app.post('/api/departments', requireAdmin, auditMiddleware('DEPARTMENT_CREATED', (req, res) => ({ departmentId: res.locals?.deptId })), async (req, res) => {
   try {
     const data = req.body;
     if (!data.name || !data.name.trim()) {
       return res.status(400).json({ error: 'Department name is required' });
     }
-    const existing = db.getDepartmentByName(data.name);
+    const existing = await db.getDepartmentByName(data.name);
     if (existing) {
       return res.status(409).json({ error: 'A department with this name already exists' });
     }
-    const dept = db.createDepartment(data);
+    const dept = await db.createDepartment(data);
     res.locals.deptId = dept.id;
     res.status(201).json(dept);
   } catch (err) {
@@ -735,23 +736,23 @@ app.post('/api/departments', requireAdmin, auditMiddleware('DEPARTMENT_CREATED',
 });
 
 // PUT /api/departments/:id - update department (admin only)
-app.put('/api/departments/:id', requireAdmin, auditMiddleware('DEPARTMENT_UPDATED', (req, res) => ({ departmentId: req.params.id })), (req, res) => {
+app.put('/api/departments/:id', requireAdmin, auditMiddleware('DEPARTMENT_UPDATED', (req, res) => ({ departmentId: req.params.id })), async (req, res) => {
   try {
     const data = req.body;
     if (data.name !== undefined && !data.name.trim()) {
       return res.status(400).json({ error: 'Department name cannot be empty' });
     }
-    const existing = db.getDepartmentById(req.params.id);
+    const existing = await db.getDepartmentById(req.params.id);
     if (!existing) {
       return res.status(404).json({ error: 'Department not found' });
     }
     if (data.name && data.name.trim().toLowerCase() !== existing.name.toLowerCase()) {
-      const duplicate = db.getDepartmentByName(data.name);
+      const duplicate = await db.getDepartmentByName(data.name);
       if (duplicate && duplicate.id !== existing.id) {
         return res.status(409).json({ error: 'Another department with this name already exists' });
       }
     }
-    const updated = db.updateDepartment(req.params.id, data);
+    const updated = await db.updateDepartment(req.params.id, data);
     res.json(updated);
   } catch (err) {
     console.error('PUT /api/departments/:id error:', err.message);
@@ -760,13 +761,13 @@ app.put('/api/departments/:id', requireAdmin, auditMiddleware('DEPARTMENT_UPDATE
 });
 
 // DELETE /api/departments/:id - delete department (admin only)
-app.delete('/api/departments/:id', requireAdmin, auditMiddleware('DEPARTMENT_DELETED', (req, res) => ({ departmentId: req.params.id })), (req, res) => {
+app.delete('/api/departments/:id', requireAdmin, auditMiddleware('DEPARTMENT_DELETED', (req, res) => ({ departmentId: req.params.id })), async (req, res) => {
   try {
-    const existing = db.getDepartmentById(req.params.id);
+    const existing = await db.getDepartmentById(req.params.id);
     if (!existing) {
       return res.status(404).json({ error: 'Department not found' });
     }
-    db.deleteDepartment(req.params.id);
+    await db.deleteDepartment(req.params.id);
     res.json({ message: 'Department deleted successfully', id: parseInt(req.params.id) });
   } catch (err) {
     console.error('DELETE /api/departments/:id error:', err.message);
@@ -813,7 +814,7 @@ app.post('/api/doctor/followup-and-notify', requireDoctor, auditMiddleware('NOTI
     // 1. Create Follow-Up Appointment if requested
     let createdAppointment = null;
     if (followup_date) {
-      createdAppointment = db.createAppointment({
+      createdAppointment = await db.createAppointment({
         patient_id: patient.id,
         appointment_date: followup_date,
         appointment_time: followup_time || '10:00',
@@ -828,12 +829,12 @@ app.post('/api/doctor/followup-and-notify', requireDoctor, auditMiddleware('NOTI
     let visit = null;
     let prescriptions = [];
     if (visit_id) {
-      const allVisits = db.getVisitsByPatient(patient.id, canDecrypt);
+      const allVisits = await db.getVisitsByPatient(patient.id, canDecrypt);
       visit = allVisits.find(v => v.id === parseInt(visit_id));
-      prescriptions = db.getPrescriptionsByVisit(parseInt(visit_id), canDecrypt);
+      prescriptions = await db.getPrescriptionsByVisit(parseInt(visit_id), canDecrypt);
     }
     if (!prescriptions || prescriptions.length === 0) {
-      prescriptions = db.getPrescriptionsByPatient(patient.id, canDecrypt).slice(0, 5);
+      prescriptions = (await db.getPrescriptionsByPatient(patient.id, canDecrypt)).slice(0, 5);
     }
 
     // 3. Send Email (using notifications module)
@@ -854,7 +855,7 @@ app.post('/api/doctor/followup-and-notify', requireDoctor, auditMiddleware('NOTI
           });
 
           // Log in database
-          const loggedEmail = db.createNotification({
+          const loggedEmail = await db.createNotification({
             patient_id: patient.id,
             visit_id: visit ? visit.id : null,
             appointment_id: createdAppointment ? createdAppointment.id : null,
@@ -864,11 +865,29 @@ app.post('/api/doctor/followup-and-notify', requireDoctor, auditMiddleware('NOTI
             content: emailResult.htmlContent,
             status: 'sent',
           });
-          emailResult.notification_id = loggedEmail.id;
+          emailResult.notification_id = loggedEmail ? loggedEmail.id : null;
           res.locals.emailSent = true;
         } catch (emailErr) {
           console.error('Email sending error:', emailErr.message);
-          emailResult = { success: false, error: emailErr.message };
+          let failedNotif = null;
+          try {
+            failedNotif = await db.createNotification({
+              patient_id: patient.id,
+              visit_id: visit ? visit.id : null,
+              appointment_id: createdAppointment ? createdAppointment.id : null,
+              channel: 'email',
+              recipient: emailRecipient,
+              subject: 'Failed Follow-up Consultation Summary',
+              content: emailErr.message,
+              status: 'failed',
+            });
+          } catch (logErr) {}
+          emailResult = {
+            success: false,
+            error: emailErr.message,
+            recipient: emailRecipient,
+            notification_id: failedNotif ? failedNotif.id : null
+          };
           res.locals.emailSent = false;
         }
       } else {
@@ -894,7 +913,7 @@ app.post('/api/doctor/followup-and-notify', requireDoctor, auditMiddleware('NOTI
           });
 
           // Log in database
-          const loggedWhatsApp = db.createNotification({
+          const loggedWhatsApp = await db.createNotification({
             patient_id: patient.id,
             visit_id: visit ? visit.id : null,
             appointment_id: createdAppointment ? createdAppointment.id : null,
@@ -921,10 +940,11 @@ app.post('/api/doctor/followup-and-notify', requireDoctor, auditMiddleware('NOTI
 
     res.json({
       success: true,
-      message: 'Follow-up appointment scheduled & notifications dispatched!',
+      message: 'Follow-up appointment processed.',
       appointment: createdAppointment,
       email: emailResult,
       whatsapp: whatsappResult,
+      warning: (emailResult && !emailResult.success) ? emailResult.error : null
     });
   } catch (err) {
     console.error('POST /api/doctor/followup-and-notify error:', err.message);
@@ -933,9 +953,9 @@ app.post('/api/doctor/followup-and-notify', requireDoctor, auditMiddleware('NOTI
 });
 
 // GET /api/notifications/patient/:patientId - notification logs
-app.get('/api/notifications/patient/:patientId', auth.requireAuth(), auditMiddleware('NOTIFICATIONS_LIST'), (req, res) => {
+app.get('/api/notifications/patient/:patientId', auth.requireAuth(), auditMiddleware('NOTIFICATIONS_LIST'), async (req, res) => {
   try {
-    const list = db.getNotificationsByPatient(parseInt(req.params.patientId));
+    const list = await db.getNotificationsByPatient(parseInt(req.params.patientId));
     res.json(list);
   } catch (err) {
     console.error('GET /api/notifications/patient error:', err.message);
@@ -944,9 +964,9 @@ app.get('/api/notifications/patient/:patientId', auth.requireAuth(), auditMiddle
 });
 
 // GET /api/notifications/view-email/:id - view rendered HTML email
-app.get('/api/notifications/view-email/:id', auth.requireAuth(), (req, res) => {
+app.get('/api/notifications/view-email/:id', auth.requireAuth(), async (req, res) => {
   try {
-    const notif = db.getNotificationById(parseInt(req.params.id));
+    const notif = await db.getNotificationById(parseInt(req.params.id));
     if (!notif || notif.channel !== 'email') {
       return res.status(404).send('Email notification record not found');
     }
@@ -968,7 +988,7 @@ app.get('/api/visits/:visitId/pdf', requireDoctor, auditMiddleware('PDF_DOWNLOAD
     let targetPatient = null;
 
     for (const p of patients) {
-      const vList = db.getVisitsByPatient(p.id, canDecrypt);
+      const vList = await db.getVisitsByPatient(p.id, canDecrypt);
       const found = vList.find(v => v.id === visitId);
       if (found) {
         targetVisit = found;
@@ -981,7 +1001,7 @@ app.get('/api/visits/:visitId/pdf', requireDoctor, auditMiddleware('PDF_DOWNLOAD
       return res.status(404).send('Visit or patient record not found');
     }
 
-    const prescriptions = db.getPrescriptionsByVisit(visitId, canDecrypt);
+    const prescriptions = await db.getPrescriptionsByVisit(visitId, canDecrypt);
     const pRecord = await db.getPatientByCardUID(targetPatient.card_uid, canDecrypt);
     const appointment = (pRecord && pRecord.appointments && pRecord.appointments.length > 0) ? pRecord.appointments[0] : null;
 
@@ -1009,9 +1029,9 @@ app.get('/api/visits/:visitId/pdf', requireDoctor, auditMiddleware('PDF_DOWNLOAD
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────────
 
 // GET /api/dashboard/stats - dashboard statistics
-app.get('/api/dashboard/stats', auth.requireAuth(), auditMiddleware('DASHBOARD_STATS'), (req, res) => {
+app.get('/api/dashboard/stats', auth.requireAuth(), auditMiddleware('DASHBOARD_STATS'), async (req, res) => {
   try {
-    const stats = db.getDashboardStats();
+    const stats = await db.getDashboardStats();
     res.json(stats);
   } catch (err) {
     console.error('GET /api/dashboard/stats error:', err.message);
@@ -1024,7 +1044,7 @@ app.get('/api/dashboard/stats', auth.requireAuth(), auditMiddleware('DASHBOARD_S
 // GET /api/admin/stats - admin stats
 app.get('/api/admin/stats', requireAdmin, auditMiddleware('ADMIN_STATS'), async (req, res) => {
   try {
-    const stats = db.getDashboardStats();
+    const stats = await db.getDashboardStats();
     const totalPatients = (await db.getAllPatients(true)).length;
     const totalDoctors = (await db.getDoctors()).length;
     res.json({ ...stats, totalPatients, totalDoctors });
