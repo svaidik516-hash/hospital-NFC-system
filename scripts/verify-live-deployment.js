@@ -119,9 +119,24 @@ async function main() {
   // Step 6: Test follow-up scheduling and email dispatch on live site
   console.log('\n6. Testing follow-up consultation and email dispatch on live site...');
   const patRes = await request(`${BASE}/api/patients`, { headers: authHeaders });
-  const patient = patRes.body?.[0];
+  let patient = Array.isArray(patRes.body) ? (patRes.body.find(p => p.id === 1) || patRes.body[0]) : null;
+  if (!patient) {
+    // If no patient exists, create one
+    const newPat = await request(`${BASE}/api/patients`, {
+      method: 'POST',
+      headers: authHeaders
+    }, {
+      name: 'Test Live Patient',
+      card_uid: `LIVE_NFC_${uniqueId}`,
+      gender: 'Other',
+      age: 30,
+      contact_email: 'test.vb.181@gmail.com',
+      contact_phone: '+15551234567'
+    });
+    patient = newPat.body;
+  }
   if (patient) {
-    const emailTarget = patient.contact_email || 'test.vb.181@gmail.com';
+    const emailTarget = 'test.vb.181@gmail.com';
     console.log(`   Sending consultation email for patient ${patient.id} to ${emailTarget}...`);
     const notifRes = await request(`${BASE}/api/doctor/followup-and-notify`, {
       method: 'POST',
